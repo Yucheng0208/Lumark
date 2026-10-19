@@ -256,7 +256,10 @@
       ex.exposure && `${ex.exposure}s`,
     ].filter(Boolean).join('  ');
 
-    const when = [show.date && ex.date, show.time && ex.time].filter(Boolean).join(' ');
+    const when = [
+      show.date && ex.date && (fmt.date ? fmt.date(ex.date) : ex.date),
+      show.time && ex.time && (fmt.time ? fmt.time(ex.time) : ex.time),
+    ].filter(Boolean).join(' ');
     let weather = show.weather && ex.weather ? fmt.weatherLabel(ex.weather) : '';
     if (show.temp && ex.temp !== '' && ex.temp != null && !isNaN(ex.temp)) {
       const c = Number(ex.temp);
@@ -392,8 +395,8 @@
   /* ---------- 繪製 ---------- */
 
   const THEMES = {
-    light: { bg: '#ffffff', text: '#000000', sub: '#646464' },
-    dark: { bg: '#111111', text: '#ffffff', sub: '#a0a0a0' },
+    light: { bg: '#ffffff', text: '#000000', sub: '#646464', divider: '#c8c8c8' },
+    dark: { bg: '#111111', text: '#ffffff', sub: '#a0a0a0', divider: '#555555' },
   };
 
   const FONT_STACK = 'Saira, "PingFang TC", "Hiragino Sans", "Noto Sans TC", "Noto Sans JP", "Microsoft JhengHei", sans-serif';
@@ -461,10 +464,12 @@
     // 字太長放不下時整體縮小字級（最小到 55%）
     let fontSize = Math.floor(bar / 4);
     const minSize = Math.floor(fontSize * 0.55);
+    // Logo ｜ 分隔線 ｜ 文字 之間的距離
+    const divGap = Math.round(pad * 0.9);
     const fixed = () => {
       let f = 0;
       if (lines.left.length && (lines.right.length || logoW)) f += pad * 2;
-      if (logoW) f += logoW + (lines.right.length ? pad : 0);
+      if (logoW) f += logoW + (lines.right.length ? divGap * 2 : 0);
       return f;
     };
     while (fontSize > minSize && widthOf(lines.left, fontSize) + widthOf(lines.right, fontSize) + fixed() > right - left) {
@@ -494,19 +499,23 @@
     if (lines.right.length) {
       drawLines(lines.right, rx);
       if (logoW) {
+        // 分隔線：比文字區塊短（約 60%）、置中、淺灰色
         const top = blockTop(lines.right.length);
-        const h = fontSize + (lines.right.length - 1) * lineGap;
-        ctx.strokeStyle = theme.sub;
-        ctx.lineWidth = Math.max(1, Math.floor(fontSize / 8));
+        const blockH = fontSize + (lines.right.length - 1) * lineGap;
+        const h = Math.round(blockH * 0.6);
+        const y = top + Math.round((blockH - h) / 2);
+        ctx.strokeStyle = theme.divider;
+        ctx.lineWidth = Math.max(1, Math.round(fontSize / 10));
+        ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(rx - pad / 2, top);
-        ctx.lineTo(rx - pad / 2, top + h);
+        ctx.moveTo(rx - divGap, y);
+        ctx.lineTo(rx - divGap, y + h);
         ctx.stroke();
       }
     }
 
     if (logoW && logoH > 0) {
-      const lx = lines.right.length ? rx - logoW - pad : right - logoW;
+      const lx = lines.right.length ? rx - divGap * 2 - logoW : right - logoW;
       ctx.drawImage(logo, Math.round(lx), barTop + Math.round((bar - logoH) / 2), logoW, logoH);
     }
     return L;

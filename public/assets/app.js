@@ -17,6 +17,8 @@
     borderPct: 4,
     video: { format: 'mp4', mute: false, loops: 1, boomerang: false, gifInfinite: true, fps: 15, maxWidth: 0 },
     tempUnit: 'C',
+    dateFormat: 'slash', // slash：YYYY/MM/DD；dash：YYYY-MM-DD
+    timeFormat: '24',    // 24 或 12 小時制
     locFormat: 'country-city',
     autoGeo: true, // 相片沒有 GPS 時，用手機／電腦目前位置取得地點、天氣與溫度
     suffix: '_lumark',
@@ -35,6 +37,8 @@
   }
 
   const settings = loadSettings();
+  // 合成的相框一律白色（介面的淺色／深色主題不受影響）
+  settings.frameTheme = 'light';
   // 舊版預設為關閉；改為預設開啟後，對已存過設定的使用者套用一次
   if (!settings.autoGeoV2) { settings.autoGeo = true; settings.autoGeoV2 = true; }
   function saveSettings() {
@@ -441,8 +445,31 @@
     return settings.logo;
   }
 
+  /* 日期：YYYY/MM/DD 或 YYYY-MM-DD（輸入欄位兩種寫法都接受） */
+  function formatDate(d) {
+    const m = String(d).match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})$/);
+    if (!m) return d;
+    const sep = settings.dateFormat === 'dash' ? '-' : '/';
+    return [m[1], m[2].padStart(2, '0'), m[3].padStart(2, '0')].join(sep);
+  }
+
+  /* 時間：24 小時制，或依語言顯示 12 小時制（下午 1:32／1:32 PM／午後1:32） */
+  function formatTime(tm) {
+    const m = String(tm).match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return tm;
+    const h = +m[1], mm = m[2];
+    if (settings.timeFormat !== '12') return `${String(h).padStart(2, '0')}:${mm}`;
+    const h12 = h % 12 || 12;
+    const pm = h >= 12;
+    if (I18n.lang === 'en') return `${h12}:${mm} ${pm ? 'PM' : 'AM'}`;
+    if (I18n.lang === 'ja') return `${pm ? '午後' : '午前'}${h12}:${mm}`;
+    return `${pm ? '下午' : '上午'} ${h12}:${mm}`;
+  }
+
   function linesFor(p) {
     return Frame.buildLines(p.exif, settings.show, {
+      date: formatDate,
+      time: formatTime,
       weatherLabel: weatherText,
       tempUnit: settings.tempUnit,
       coords: Geo.formatCoords,
@@ -878,8 +905,9 @@
     }));
     sync();
   }
-  bindSeg('data-frame-theme', 'frameTheme');
   bindSeg('data-unit', 'tempUnit');
+  bindSeg('data-date-format', 'dateFormat');
+  bindSeg('data-time-format', 'timeFormat');
 
   bindSeg('data-style', 'style');
   document.querySelectorAll('[data-style]').forEach((b) => b.addEventListener('click', () => {

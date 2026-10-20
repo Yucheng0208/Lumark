@@ -9,5 +9,9 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
-  }
+  },
+  // 正式網址
+  "routes": [
+    { "pattern": "lumark.yucheng208.net", "custom_domain": true }
+  ]
 }

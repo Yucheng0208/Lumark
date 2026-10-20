@@ -11,7 +11,10 @@
   const SETTINGS_KEY = 'lumark.settings';
   const DEFAULTS = {
     logo: 'auto',
-    frameTheme: 'light',
+    frameColor: '#ffffff', // 邊框顏色（預設白色，可選黑色或任意顏色）
+    layout: 'classic',     // classic：左資訊＋右 Logo；center：資訊置中、不放 Logo
+    logoColor: 'mono',     // mono：依邊框自動黑／白；original：品牌原色
+    signature: { kind: 'none', text: '', font: 'script', pos: 'photo-br', sizePct: 5, opacity: 0.9, color: 'auto' },
     framePct: 10,
     style: 'bar',        // bar：只有底部資訊列；border：另外三邊也加框
     borderPct: 4,
@@ -32,13 +35,17 @@
   function loadSettings() {
     try {
       const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
-      return { ...DEFAULTS, ...s, show: { ...DEFAULTS.show, ...(s.show || {}) }, video: { ...DEFAULTS.video, ...(s.video || {}) } };
+      return {
+        ...DEFAULTS, ...s,
+        show: { ...DEFAULTS.show, ...(s.show || {}) },
+        video: { ...DEFAULTS.video, ...(s.video || {}) },
+        signature: { ...DEFAULTS.signature, ...(s.signature || {}) },
+      };
     } catch (e) { return structuredClone(DEFAULTS); }
   }
 
   const settings = loadSettings();
-  // 合成的相框一律白色（介面的淺色／深色主題不受影響）
-  settings.frameTheme = 'light';
+  if (!Frame.parseColor(settings.frameColor)) settings.frameColor = '#ffffff';
   // 舊版預設為關閉；改為預設開啟後，對已存過設定的使用者套用一次
   if (!settings.autoGeoV2) { settings.autoGeo = true; settings.autoGeoV2 = true; }
   function saveSettings() {
@@ -440,7 +447,7 @@
   function cropOf(p) { return p.crop || { x: 0, y: 0, w: p.W, h: p.H }; }
 
   function logoKeyFor(p) {
-    if (!settings.show.logo) return 'none';
+    if (!settings.show.logo || settings.layout === 'center') return 'none';
     if (settings.logo === 'auto') return Frame.logoForMake(p.exif.make, p.exif.model) || p.sourceLogo || 'none';
     return settings.logo;
   }
@@ -478,9 +485,22 @@
 
   function frameOpts(extra) {
     return {
-      theme: settings.frameTheme, framePct: settings.framePct,
-      style: settings.style, borderPct: settings.borderPct, ...extra,
+      frameColor: settings.frameColor, layout: settings.layout, framePct: settings.framePct,
+      style: settings.style, borderPct: settings.borderPct, signature: signatureOpts(), ...extra,
     };
+  }
+
+  function logoOpts() {
+    return { dark: Frame.isDark(settings.frameColor), mono: settings.logoColor === 'mono' };
+  }
+
+  /* 作者簽名：圖片存在記憶體（不寫入瀏覽器儲存空間） */
+  let signatureImage = null;
+  function signatureOpts() {
+    const sg = settings.signature;
+    if (sg.kind === 'text' && sg.text.trim()) return { ...sg, text: sg.text.trim() };
+    if (sg.kind === 'image' && signatureImage) return { ...sg, image: signatureImage };
+    return null;
   }
 
   function layoutOf(crop, even) { return Frame.frameLayout(crop.w, crop.h, frameOpts({ even })); }
@@ -492,7 +512,7 @@
     if (!p || state.mode !== 'preview') { stopPlayback(); return; }
     const token = ++renderToken;
     const crop = cropOf(p);
-    const logo = await Frame.getLogo(logoKeyFor(p), state.customLogos, settings.frameTheme);
+    const logo = await Frame.getLogo(logoKeyFor(p), state.customLogos, logoOpts());
     if (token !== renderToken) return;
     previewLogo = logo;
     drawPreviewFrame(p);
@@ -587,7 +607,7 @@
     if (p.kind !== 'photo') return renderVideo(p, onProgress);
     if (p.fullPromise) await p.fullPromise; // RAW 等完整解析度解碼完再輸出
     const crop = cropOf(p);
-    const logo = await Frame.getLogo(logoKeyFor(p), state.customLogos, settings.frameTheme);
+    const logo = await Frame.getLogo(logoKeyFor(p), state.customLogos, logoOpts());
     const layout = layoutOf(crop);
     let scale = 1;
     if (isIOS && layout.width * layout.height > IOS_MAX_AREA) {
@@ -612,14 +632,14 @@
       w: Math.floor((c.w * s) / 2) * 2, h: Math.floor((c.h * s) / 2) * 2,
     };
     const layout = layoutOf(crop, true);
-    const logo = await Frame.getLogo(logoKeyFor(p), state.customLogos, settings.frameTheme);
+    const logo = await Frame.getLogo(logoKeyFor(p), state.customLogos, logoOpts());
     const canvas = document.createElement('canvas');
     Frame.drawFrame(canvas, p.img, crop, linesFor(p), logo, frameOpts({ even: true, overlayOnly: true }));
     const overlay = await new Promise((res) => canvas.toBlob(res, 'image/png'));
     const v = settings.video;
     return Media.exportVideo({
       file: p.file, crop, layout, overlay,
-      bg: settings.frameTheme === 'dark' ? '#111111' : '#ffffff',
+      bg: settings.frameColor,
       format: v.format, mute: v.mute, loops: v.loops, boomerang: v.boomerang,
       gifInfinite: v.gifInfinite, fps: v.fps, maxWidth: Number(v.maxWidth) || 0,
     }, onProgress || (() => {}));
@@ -744,7 +764,7 @@
 
   async function renderStill(p) {
     const crop = cropOf(p);
-    const logo = await Frame.getLogo(logoKeyFor(p), state.customLogos, settings.frameTheme);
+    const logo = await Frame.getLogo(logoKeyFor(p), state.customLogos, logoOpts());
     const canvas = document.createElement('canvas');
     Frame.drawFrame(canvas, p.img, crop, linesFor(p), logo, frameOpts({ scale: 1 }));
     const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.95));
@@ -908,6 +928,134 @@
   bindSeg('data-unit', 'tempUnit');
   bindSeg('data-date-format', 'dateFormat');
   bindSeg('data-time-format', 'timeFormat');
+
+  /* ---------- 版型、邊框顏色、Logo 顏色 ---------- */
+
+  bindSeg('data-layout', 'layout');
+  bindSeg('data-logo-color', 'logoColor');
+  const syncLayoutMode = () => { $('settings-panel').dataset.layoutMode = settings.layout; };
+  document.querySelectorAll('[data-layout]').forEach((b) => b.addEventListener('click', syncLayoutMode));
+  syncLayoutMode();
+
+  function setFrameColor(hex, from) {
+    const c = Frame.parseColor(hex);
+    if (!c) return false;
+    settings.frameColor = c;
+    saveSettings();
+    document.querySelectorAll('[data-frame-color]').forEach((b) => b.classList.toggle('active', b.dataset.frameColor === c));
+    if (from !== 'picker') $('frame-color-picker').value = c;
+    if (from !== 'text') { $('frame-color-text').value = c.toUpperCase(); $('frame-color-text').classList.remove('invalid'); }
+    renderPreview();
+    return true;
+  }
+  document.querySelectorAll('[data-frame-color]').forEach((b) => b.addEventListener('click', () => setFrameColor(b.dataset.frameColor)));
+  $('frame-color-picker').addEventListener('input', (e) => setFrameColor(e.target.value, 'picker'));
+  $('frame-color-text').addEventListener('input', (e) => {
+    const ok = !e.target.value.trim() || setFrameColor(e.target.value, 'text');
+    e.target.classList.toggle('invalid', !ok);
+  });
+  $('frame-color-text').addEventListener('change', (e) => { if (setFrameColor(e.target.value)) e.target.blur(); });
+
+  // 吸取顏色：Chrome／Edge 可從螢幕任何地方吸色；其他瀏覽器改成點一下預覽上的位置
+  let picking = false;
+  function stopPicking() {
+    picking = false;
+    document.body.classList.remove('picking');
+    $('eyedropper').classList.remove('active');
+    $('eyedropper-hint').hidden = true;
+  }
+  $('eyedropper').addEventListener('click', async () => {
+    if (picking) { stopPicking(); return; }
+    if (window.EyeDropper) {
+      try { const r = await new window.EyeDropper().open(); setFrameColor(r.sRGBHex); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    if (!active()) return;
+    picking = true;
+    document.body.classList.add('picking');
+    $('eyedropper').classList.add('active');
+    $('eyedropper-hint').hidden = false;
+    if (state.mode !== 'preview') setMode('preview');
+  });
+  $('preview').addEventListener('click', (e) => {
+    if (!picking) return;
+    const cv = $('preview');
+    const r = cv.getBoundingClientRect();
+    const x = Math.floor((e.clientX - r.left) / r.width * cv.width);
+    const y = Math.floor((e.clientY - r.top) / r.height * cv.height);
+    try {
+      const px = cv.getContext('2d').getImageData(x, y, 1, 1).data;
+      setFrameColor(`rgb(${px[0]},${px[1]},${px[2]})`);
+    } catch (err) { console.warn(err); }
+    stopPicking();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && picking) stopPicking(); });
+  setFrameColor(settings.frameColor);
+
+  /* ---------- 作者簽名 ---------- */
+
+  const sig = settings.signature;
+  function syncSignatureUi() {
+    $('settings-panel').dataset.sig = sig.kind;
+    document.querySelectorAll('[data-sig-kind]').forEach((b) => b.classList.toggle('active', b.dataset.sigKind === sig.kind));
+    document.querySelectorAll('[data-sig-color]').forEach((b) => b.classList.toggle('active', b.dataset.sigColor === sig.color));
+    $('sig-size-val').textContent = `${sig.sizePct}%`;
+    $('sig-opacity-val').textContent = `${Math.round(sig.opacity * 100)}%`;
+  }
+  function changeSig(patch) { Object.assign(sig, patch); saveSettings(); syncSignatureUi(); renderPreview(); }
+
+  // 手寫字體從 Google Fonts 載入（只在選用時載入一次）
+  let scriptFontReady = null;
+  function ensureScriptFont() {
+    if (sig.font !== 'script') return Promise.resolve();
+    if (!scriptFontReady) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap';
+      document.head.appendChild(link);
+      scriptFontReady = new Promise((r) => { link.onload = r; link.onerror = r; })
+        .then(() => document.fonts.load('48px "Great Vibes"')).catch(() => {});
+    }
+    return scriptFontReady;
+  }
+
+  document.querySelectorAll('[data-sig-kind]').forEach((b) => b.addEventListener('click', () => {
+    if (b.dataset.sigKind === 'text') ensureScriptFont().then(renderPreview);
+    if (b.dataset.sigKind === 'text' && sig.color === 'original') sig.color = 'auto';
+    changeSig({ kind: b.dataset.sigKind });
+  }));
+  document.querySelectorAll('[data-sig-color]').forEach((b) => b.addEventListener('click', () => changeSig({ color: b.dataset.sigColor })));
+  $('sig-text').value = sig.text;
+  $('sig-text').addEventListener('input', (e) => changeSig({ text: e.target.value }));
+  $('sig-font').value = sig.font;
+  $('sig-font').addEventListener('change', (e) => { changeSig({ font: e.target.value }); ensureScriptFont().then(renderPreview); });
+  $('sig-pos').value = sig.pos;
+  $('sig-pos').addEventListener('change', (e) => changeSig({ pos: e.target.value }));
+  $('sig-size').value = sig.sizePct;
+  $('sig-size').addEventListener('input', (e) => changeSig({ sizePct: Number(e.target.value) }));
+  $('sig-opacity').value = Math.round(sig.opacity * 100);
+  $('sig-opacity').addEventListener('input', (e) => changeSig({ opacity: Number(e.target.value) / 100 }));
+
+  let sigFile = null;
+  async function loadSignatureImage() {
+    if (!sigFile) { signatureImage = null; return; }
+    const url = URL.createObjectURL(sigFile);
+    try {
+      const img = await Frame.loadImage(url);
+      signatureImage = Frame.trimTransparent($('sig-remove-white').checked ? Frame.removeWhite(img) : img);
+    } finally { URL.revokeObjectURL(url); }
+    renderPreview();
+  }
+  $('sig-upload').addEventListener('change', (e) => {
+    sigFile = e.target.files[0] || null;
+    e.target.value = '';
+    $('sig-file').textContent = sigFile ? sigFile.name : '';
+    if (sigFile && sig.kind !== 'image') changeSig({ kind: 'image' });
+    loadSignatureImage();
+  });
+  $('sig-remove-white').addEventListener('change', loadSignatureImage);
+  syncSignatureUi();
+  if (sig.kind === 'text') ensureScriptFont().then(renderPreview);
 
   bindSeg('data-style', 'style');
   document.querySelectorAll('[data-style]').forEach((b) => b.addEventListener('click', () => {
@@ -1154,7 +1302,6 @@
     if (!action) return;
     sheet.close();
     if (action === 'files') $('file-input').click();
-    if (action === 'camera') $('camera-input').click();
   });
   $('sheet-url-form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -1163,7 +1310,6 @@
     $('sheet-url-input').value = '';
     importUrl(url);
   });
-  $('camera-input').addEventListener('change', (e) => { addFiles(e.target.files); e.target.value = ''; });
   $('save-top').addEventListener('click', saveToDevice);
 
   // 桌機版是各面板內部捲動，手機版是整頁捲動，兩者都要處理

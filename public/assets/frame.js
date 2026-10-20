@@ -281,7 +281,14 @@
     if (show.model && ex.model) right.push({ text: ex.model, bold: true });
     if (show.lens && ex.lens) right.push({ text: ex.lens, bold: false });
 
-    return { left, right };
+    // 置中版型：機身／鏡頭＋拍攝參數／其他資訊，各一行
+    const center = [];
+    if (show.model && ex.model) center.push({ text: ex.model, bold: true });
+    const mid = [show.lens && ex.lens, show.shot && shot].filter(Boolean).join(SEP);
+    if (mid) center.push({ text: mid, bold: center.length === 0 });
+    if (extra) center.push({ text: extra, bold: false });
+
+    return { left, right, center };
   }
 
   /* ---------- Logo 載入（自動裁掉透明邊） ---------- */
@@ -367,39 +374,125 @@
     return c;
   }
 
-  /** theme 為 dark 時，標記 adapt 的黑色 Logo 會改為白色 */
-  async function getLogo(key, customLogos, theme) {
-    if (!key || key === 'none') return null;
+  /**
+   * 單色 Logo：依「深淺」產生遮罩後填入單一顏色。
+   * 透明背景的 Logo 直接變成黑／白剪影；有底色的 Logo（如 Nikon 黃底、Leica 紅圓）
+   * 會把淺色部分去掉、保留深色字樣，所以任何 Logo 都能變成黑白兩色。
+   */
+  function monochrome(src, color) {
+    const w = src.width, h = src.height;
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(src, 0, 0);
+    let img;
+    try { img = ctx.getImageData(0, 0, w, h); } catch (e) { return tint(src, color); }
+    const d = img.data;
+    const dark = new Float32Array(w * h);
+    let max = 0;
+    for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+      const lum = (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
+      const v = (1 - lum) * (d[i + 3] / 255);
+      dark[j] = v;
+      if (v > max) max = v;
+    }
+    if (max < 0.05) return tint(src, color); // 全是淺色（例如白色 Logo）：直接用外形
+    const t0 = max * 0.15;
+    const [r, g, b] = hexToRgb(color);
+    for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+      const a = Math.max(0, Math.min(1, (dark[j] - t0) / (max - t0)));
+      d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = Math.round(a * 255);
+    }
+    ctx.putImageData(img, 0, 0);
+    return trimTransparent(c);
+  }
+
+  async function loadLogoBase(key, customLogos) {
     const info = LOGOS.find((l) => l.key === key);
-    const variant = info && (info.adapt || info.darkFile) && theme === 'dark' ? `${key}@dark` : key;
+    const custom = customLogos && customLogos[key];
+    if (info && info.text) return document.fonts.ready.then(() => textMark(info.text));
+    if (custom) return loadImage(custom.src).then((img) => trimTransparent(custom.removeWhite ? removeWhite(img) : img)).catch(() => null);
+    return loadImage(`logo/${info ? info.file : key + '.png'}`).then(trimTransparent).catch(() => null);
+  }
+
+  /**
+   * @param opts { dark: 邊框是否為深色, mono: 是否使用單色 Logo }
+   * mono：深色邊框用白色 Logo、淺色邊框用黑色 Logo；
+   * 原色：深色邊框時，黑色 Logo（adapt）自動改白，有 darkFile 的改用深色版圖檔。
+   */
+  async function getLogo(key, customLogos, opts) {
+    if (!key || key === 'none') return null;
+    const o = typeof opts === 'string' ? { dark: opts === 'dark' } : (opts || {});
+    const info = LOGOS.find((l) => l.key === key);
+    let variant = key;
+    if (o.mono) variant = `${key}@mono-${o.dark ? 'w' : 'b'}`;
+    else if (o.dark && info && (info.adapt || info.darkFile)) variant = `${key}@dark`;
     if (logoCache.has(variant)) return logoCache.get(variant);
     let p;
-    if (variant !== key && info.darkFile) {
+    if (o.mono) {
+      p = getLogo(key, customLogos, {}).then((c) => (c ? monochrome(c, o.dark ? '#ffffff' : '#000000') : null));
+    } else if (variant !== key && info.darkFile) {
       p = loadImage(`logo/${info.darkFile}`).then(trimTransparent).catch(() => null);
     } else if (variant !== key) {
-      p = getLogo(key, customLogos, 'light').then((c) => (c ? tint(c, '#ffffff') : null));
+      p = getLogo(key, customLogos, {}).then((c) => (c ? tint(c, '#ffffff') : null));
     } else {
-      const custom = customLogos && customLogos[key];
-      if (info && info.text) {
-        p = document.fonts.ready.then(() => textMark(info.text));
-      } else if (custom) {
-        p = loadImage(custom.src).then((img) => trimTransparent(custom.removeWhite ? removeWhite(img) : img)).catch(() => null);
-      } else {
-        p = loadImage(`logo/${info ? info.file : key + '.png'}`).then(trimTransparent).catch(() => null);
-      }
+      p = loadLogoBase(key, customLogos);
     }
     logoCache.set(variant, p);
     return p;
   }
 
+  /* ---------- 顏色 ---------- */
+
+  function hexToRgb(hex) {
+    const m = String(hex).replace('#', '');
+    const full = m.length === 3 ? m.split('').map((x) => x + x).join('') : m;
+    const n = parseInt(full, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+
+  function rgbToHex(r, g, b) {
+    return '#' + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+  }
+
+  /** 接受 #fff、#ffffff、ffffff、rgb(1,2,3)、1,2,3、1 2 3；無效時回傳 null */
+  function parseColor(input) {
+    const s = String(input || '').trim().toLowerCase();
+    let m = s.match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/);
+    if (m) return '#' + (m[1].length === 3 ? m[1].split('').map((x) => x + x).join('') : m[1]);
+    m = s.match(/^(?:rgba?\()?\s*(\d{1,3})[\s,]+(\d{1,3})[\s,]+(\d{1,3})(?:[\s,/]+[\d.]+%?)?\s*\)?$/);
+    if (m && [m[1], m[2], m[3]].every((v) => +v <= 255)) return rgbToHex(+m[1], +m[2], +m[3]);
+    return null;
+  }
+
+  function luminance(hex) {
+    const [r, g, b] = hexToRgb(hex).map((v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
+  const isDark = (hex) => luminance(hex) < 0.4;
+
+  /** 依邊框顏色自動決定文字、次要文字、分隔線顏色 */
+  function colorsFor(bg) {
+    const dark = isDark(bg);
+    const [r, g, b] = hexToRgb(bg);
+    const mix = (t, k) => rgbToHex(r + (t - r) * k, g + (t - g) * k, b + (t - b) * k);
+    return dark
+      ? { bg, dark, text: '#ffffff', sub: mix(255, 0.62), divider: mix(255, 0.3) }
+      : { bg, dark, text: '#000000', sub: mix(0, 0.6), divider: mix(0, 0.22) };
+  }
+
   /* ---------- 繪製 ---------- */
 
-  const THEMES = {
-    light: { bg: '#ffffff', text: '#000000', sub: '#646464', divider: '#c8c8c8' },
-    dark: { bg: '#111111', text: '#ffffff', sub: '#a0a0a0', divider: '#555555' },
-  };
-
   const FONT_STACK = 'Saira, "PingFang TC", "Hiragino Sans", "Noto Sans TC", "Noto Sans JP", "Microsoft JhengHei", sans-serif';
+  const SIGNATURE_FONTS = {
+    saira: FONT_STACK,
+    serif: '"Times New Roman", "Songti TC", "Noto Serif TC", serif',
+    script: '"Great Vibes", "Snell Roundhand", "Segoe Script", cursive',
+  };
 
   /**
    * 版面尺寸：底部資訊列高度（bar）與另外三邊的邊框（side）都依「裁切後」相片短邊的百分比計算，
@@ -423,8 +516,9 @@
    * @param img     已套用方向的圖片 / 影片元素
    * @param crop    {x,y,w,h}（原始像素）
    * @param lines   buildLines() 的結果
-   * @param logo    canvas 或 null
-   * @param opts    { theme, framePct, style, borderPct, even, scale, overlayOnly }
+   * @param logo    canvas 或 null（置中版型不使用）
+   * @param opts    { frameColor, layout: 'classic'|'center', framePct, style, borderPct, even, scale,
+   *                  overlayOnly, signature }
    *                overlayOnly：相片區域保持透明（給影片疊圖用）
    */
   function drawFrame(canvas, img, crop, lines, logo, opts) {
@@ -432,7 +526,7 @@
     const W = crop.w, H = crop.h;
     const L = frameLayout(W, H, opts);
     const { bar, side } = L;
-    const theme = THEMES[opts.theme] || THEMES.light;
+    const theme = colorsFor(opts.frameColor || '#ffffff');
 
     const cw = Math.max(1, Math.round(L.width * scale));
     const ch = Math.max(1, Math.round(L.height * scale));
@@ -446,80 +540,154 @@
     ctx.fillRect(0, 0, L.width, L.height);
     if (opts.overlayOnly) ctx.clearRect(L.imgX, L.imgY, W, H);
     else ctx.drawImage(img, crop.x, crop.y, W, H, L.imgX, L.imgY, W, H);
-    if (bar <= 0) return L;
 
     const barTop = side + H;
     const pad = Math.floor(bar / 5);
     // 有外框時文字與相片左右邊緣對齊
     const left = side > 0 ? side : pad;
     const right = side > 0 ? side + W : W - pad;
-    // 寬的文字型 Logo（ChatGPT、Samsung…）限制寬度，避免比文字還搶眼
-    let logoH = Math.floor(bar / 1.5);
-    let logoW = logo ? Math.round(logoH / logo.height * logo.width) : 0;
-    const maxLogoW = Math.round(bar * 1.6);
-    if (logoW > maxLogoW) { logoH = Math.round(logoH * maxLogoW / logoW); logoW = maxLogoW; }
     const font = (bold, size) => `${bold ? 700 : 400} ${size}px ${FONT_STACK}`;
     const widthOf = (arr, size) => Math.max(0, ...arr.map((l) => { ctx.font = font(l.bold, size); return ctx.measureText(l.text).width; }));
 
-    // 字太長放不下時整體縮小字級（最小到 55%）
-    let fontSize = Math.floor(bar / 4);
-    const minSize = Math.floor(fontSize * 0.55);
-    // Logo ｜ 分隔線 ｜ 文字 之間的距離
-    const divGap = Math.round(pad * 0.9);
-    const fixed = () => {
-      let f = 0;
-      if (lines.left.length && (lines.right.length || logoW)) f += pad * 2;
-      if (logoW) f += logoW + (lines.right.length ? divGap * 2 : 0);
-      return f;
-    };
-    while (fontSize > minSize && widthOf(lines.left, fontSize) + widthOf(lines.right, fontSize) + fixed() > right - left) {
-      fontSize = Math.max(minSize, Math.floor(fontSize * 0.95));
-    }
-
     ctx.textBaseline = 'top';
     ctx.textAlign = 'left';
-    const lineGap = Math.round(fontSize * 16 / 15);
-    const blockTop = (n) => barTop + Math.round((bar - (fontSize + (n - 1) * lineGap)) / 2);
 
-    const drawLines = (arr, x) => {
-      const top = blockTop(arr.length);
+    if (bar > 0 && opts.layout === 'center') {
+      drawCentered();
+    } else if (bar > 0) {
+      drawClassic();
+    }
+    if (opts.signature) drawSignature(opts.signature);
+    return L;
+
+    function drawLines(arr, x, fontSize, lineGap, align) {
+      const top = barTop + Math.round((bar - (fontSize + (arr.length - 1) * lineGap)) / 2);
+      ctx.textAlign = align || 'left';
       arr.forEach((l, i) => {
         ctx.font = font(l.bold, fontSize);
         ctx.fillStyle = l.bold ? theme.text : theme.sub;
         ctx.fillText(l.text, x, top + i * lineGap);
       });
-    };
+      ctx.textAlign = 'left';
+      return top;
+    }
 
-    // 左側
-    drawLines(lines.left, left);
+    /* 置中版型：沒有 Logo，所有資訊置中 */
+    function drawCentered() {
+      const arr = lines.center || [];
+      if (!arr.length) return;
+      let fontSize = Math.min(Math.floor(bar / 4), Math.floor(bar * 0.78 / (1 + (arr.length - 1) * 16 / 15)));
+      const minSize = Math.floor(fontSize * 0.55);
+      while (fontSize > minSize && widthOf(arr, fontSize) > right - left) fontSize = Math.max(minSize, Math.floor(fontSize * 0.95));
+      drawLines(arr, (left + right) / 2, fontSize, Math.round(fontSize * 16 / 15), 'center');
+    }
 
-    // 右側：文字靠右對齊成一個區塊，Logo 與分隔線在左
-    const rightW = widthOf(lines.right, fontSize);
-    const rx = right - rightW;
-    if (lines.right.length) {
-      drawLines(lines.right, rx);
-      if (logoW) {
-        // 分隔線：比文字區塊短（約 60%）、置中、淺灰色
-        const top = blockTop(lines.right.length);
-        const blockH = fontSize + (lines.right.length - 1) * lineGap;
-        const h = Math.round(blockH * 0.6);
-        const y = top + Math.round((blockH - h) / 2);
-        ctx.strokeStyle = theme.divider;
-        ctx.lineWidth = Math.max(1, Math.round(fontSize / 10));
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(rx - divGap, y);
-        ctx.lineTo(rx - divGap, y + h);
-        ctx.stroke();
+    /* 經典版型：左邊拍攝資訊，右邊 Logo ｜ 機身與鏡頭 */
+    function drawClassic() {
+      // 寬的文字型 Logo（ChatGPT、Samsung…）限制寬度，避免比文字還搶眼
+      let logoH = Math.floor(bar / 1.5);
+      let logoW = logo ? Math.round(logoH / logo.height * logo.width) : 0;
+      const maxLogoW = Math.round(bar * 1.6);
+      if (logoW > maxLogoW) { logoH = Math.round(logoH * maxLogoW / logoW); logoW = maxLogoW; }
+
+      // Logo ｜ 分隔線 ｜ 文字 之間的距離
+      const divGap = Math.round(pad * 0.9);
+      const fixed = () => {
+        let f = 0;
+        if (lines.left.length && (lines.right.length || logoW)) f += pad * 2;
+        if (logoW) f += logoW + (lines.right.length ? divGap * 2 : 0);
+        return f;
+      };
+      // 字太長放不下時整體縮小字級（最小到 55%）
+      let fontSize = Math.floor(bar / 4);
+      const minSize = Math.floor(fontSize * 0.55);
+      while (fontSize > minSize && widthOf(lines.left, fontSize) + widthOf(lines.right, fontSize) + fixed() > right - left) {
+        fontSize = Math.max(minSize, Math.floor(fontSize * 0.95));
+      }
+      const lineGap = Math.round(fontSize * 16 / 15);
+
+      drawLines(lines.left, left, fontSize, lineGap);
+
+      const rightW = widthOf(lines.right, fontSize);
+      const rx = right - rightW;
+      if (lines.right.length) {
+        const top = drawLines(lines.right, rx, fontSize, lineGap);
+        if (logoW) {
+          // 分隔線：比文字區塊短（約 60%）、置中、淺色
+          const blockH = fontSize + (lines.right.length - 1) * lineGap;
+          const h = Math.round(blockH * 0.6);
+          const y = top + Math.round((blockH - h) / 2);
+          ctx.strokeStyle = theme.divider;
+          ctx.lineWidth = Math.max(1, Math.round(fontSize / 10));
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(rx - divGap, y);
+          ctx.lineTo(rx - divGap, y + h);
+          ctx.stroke();
+        }
+      }
+      if (logoW && logoH > 0) {
+        const lx = lines.right.length ? rx - divGap * 2 - logoW : right - logoW;
+        ctx.drawImage(logo, Math.round(lx), barTop + Math.round((bar - logoH) / 2), logoW, logoH);
       }
     }
 
-    if (logoW && logoH > 0) {
-      const lx = lines.right.length ? rx - divGap * 2 - logoW : right - logoW;
-      ctx.drawImage(logo, Math.round(lx), barTop + Math.round((bar - logoH) / 2), logoW, logoH);
+    /**
+     * 作者簽名：文字或圖片
+     * sig = { kind: 'text'|'image', text, font, image, pos, sizePct, opacity, color }
+     * pos：photo-br／photo-bl／photo-tr／photo-tl（相片四角）、frame（邊框：經典版型在中央，置中版型在右側）
+     */
+    function drawSignature(sig) {
+      const short = Math.min(W, H);
+      const onFrame = sig.pos === 'frame' && bar > 0;
+      const h = onFrame ? Math.round(bar * Math.min(0.55, Math.max(0.2, sig.sizePct / 10))) : Math.round(short * sig.sizePct / 100);
+      if (h <= 0) return;
+      const margin = Math.round(short * 0.03);
+      // 顏色：auto 在相片上用白色（加陰影），在邊框上跟著文字顏色
+      let color = sig.color;
+      if (!color || color === 'auto') color = onFrame ? theme.text : '#ffffff';
+
+      let mark; // 要畫的 canvas
+      if (sig.kind === 'image' && sig.image) {
+        mark = sig.color === 'original' ? sig.image : tint(sig.image, color);
+      } else if (sig.kind === 'text' && sig.text) {
+        mark = document.createElement('canvas');
+        const mctx = mark.getContext('2d');
+        const f = `${sig.font === 'saira' ? 600 : 400} ${h}px ${SIGNATURE_FONTS[sig.font] || FONT_STACK}`;
+        mctx.font = f;
+        mark.width = Math.ceil(mctx.measureText(sig.text).width + h * 0.4);
+        mark.height = Math.ceil(h * 1.5);
+        mctx.font = f;
+        mctx.textBaseline = 'middle';
+        mctx.fillStyle = color;
+        mctx.fillText(sig.text, h * 0.2, mark.height / 2);
+        mark = trimTransparent(mark);
+      }
+      if (!mark || !mark.width) return;
+      let mw = Math.round(h / mark.height * mark.width), mh = h;
+      const maxW = onFrame ? Math.round(W * 0.3) : Math.round(W * 0.6);
+      if (mw > maxW) { mh = Math.round(mh * maxW / mw); mw = maxW; }
+
+      let x, y;
+      if (onFrame) {
+        x = opts.layout === 'center' ? right - mw : Math.round(L.width / 2 - mw / 2);
+        y = barTop + Math.round((bar - mh) / 2);
+      } else {
+        const x0 = L.imgX + margin, x1 = L.imgX + W - margin - mw;
+        const y0 = L.imgY + margin, y1 = L.imgY + H - margin - mh;
+        x = /l$/.test(sig.pos) ? x0 : x1;
+        y = /^photo-t/.test(sig.pos) ? y0 : y1;
+      }
+      ctx.save();
+      ctx.globalAlpha = Math.max(0.1, Math.min(1, sig.opacity));
+      if (!onFrame && color === '#ffffff' && sig.color !== 'original') {
+        ctx.shadowColor = 'rgba(0,0,0,.45)';
+        ctx.shadowBlur = Math.max(2, h * 0.08);
+      }
+      ctx.drawImage(mark, Math.round(x), Math.round(y), mw, mh);
+      ctx.restore();
     }
-    return L;
   }
 
-  window.Frame = { logoForHost, formatExposure, LOGOS, logoForMake, readExif, buildLines, getLogo, frameLayout, drawFrame, loadImage, logoCache };
+  window.Frame = { parseColor, colorsFor, isDark, removeWhite, trimTransparent, logoForHost, formatExposure, LOGOS, logoForMake, readExif, buildLines, getLogo, frameLayout, drawFrame, loadImage, logoCache };
 })();

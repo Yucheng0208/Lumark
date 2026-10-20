@@ -22,7 +22,7 @@
     // 在載入 CSS 前套用介面主題，避免閃爍
     try { var t = localStorage.getItem('lumark.uiTheme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
   </script>
-  <link rel="stylesheet" href="assets/style.css?v=35">
+  <link rel="stylesheet" href="assets/style.css?v=37">
 </head>
 <body>
   <!-- 開場載入畫面 -->
@@ -88,6 +88,10 @@
       </div>
     </div>
     <div class="topbar-actions">
+        <a class="kofi-btn kofi-top" href="https://ko-fi.com/G3K3292RM5" target="_blank" rel="noopener" data-i18n-aria="kofi" data-i18n-title="kofi">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298"/></svg>
+          <span data-i18n="kofi"></span>
+        </a>
       <select id="ui-theme" class="mini-select" data-i18n-aria="ui.theme">
         <option value="auto" data-i18n="ui.theme.auto"></option>
         <option value="light" data-i18n="ui.theme.light"></option>
@@ -99,7 +103,6 @@
         <span class="btn-label" data-i18n="btn.add"></span>
       </label>
       <button id="save-top" class="btn btn-primary save-top mobile-only" type="button" disabled data-i18n="btn.saveShort"></button>
-      <input id="camera-input" type="file" accept="image/*" capture="environment" hidden>
       <input id="file-input" type="file" accept="image/*,video/*,.mov,.mp4,.m4v,.mkv,.avi,.wmv,.webm,.flv,.mpg,.mpeg,.ts,.mts,.m2ts,.3gp,.ogv,.gif,.svg,.webp,.heic,.heif,.hif,.dng,.nef,.nrw,.cr2,.cr3,.crw,.arw,.srf,.sr2,.raf,.orf,.rw2,.rwl,.pef,.srw,.x3f,.3fr,.fff,.iiq,.erf,.mrw,.kdc,.dcr,.mos,.mef,.gpr" multiple hidden>
     </div>
   </header>
@@ -185,6 +188,28 @@
       <section class="group" data-tab="frame">
         <h2 data-i18n="sec.frame"></h2>
         <div class="field">
+          <label data-i18n="f.layout"></label>
+          <div class="seg seg-full">
+            <button class="seg-btn active" data-layout="classic" type="button" data-i18n="f.layout.classic"></button>
+            <button class="seg-btn" data-layout="center" type="button" data-i18n="f.layout.center"></button>
+          </div>
+        </div>
+        <div class="field">
+          <label data-i18n="f.frameColor"></label>
+          <div class="color-row">
+            <button class="swatch" data-frame-color="#ffffff" type="button" data-i18n-aria="f.white" style="--sw:#ffffff"></button>
+            <button class="swatch" data-frame-color="#000000" type="button" data-i18n-aria="f.black" style="--sw:#000000"></button>
+            <label class="swatch swatch-picker" data-i18n-title="f.colorPicker">
+              <input id="frame-color-picker" type="color" value="#ffffff" data-i18n-aria="f.colorPicker">
+            </label>
+            <input id="frame-color-text" class="color-text" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="#FFFFFF / 255,255,255" data-i18n-aria="f.colorText">
+            <button id="eyedropper" class="btn btn-ghost btn-sm icon-btn" type="button" data-i18n-title="f.eyedropper" data-i18n-aria="f.eyedropper">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="m14.5 6.5 3 3M4 20l1.2-3.6L14 7.6a2 2 0 0 1 2.8 0l-.4-.4a2 2 0 0 1 2.8 2.8l-.4-.4a2 2 0 0 1 0 2.8L10 21.2 6.4 22.4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+          <p id="eyedropper-hint" class="hint" hidden data-i18n="f.eyedropper.hint"></p>
+        </div>
+        <div class="field logo-field">
           <label for="logo-select" data-i18n="f.logo"></label>
           <div class="row">
             <select id="logo-select"></select>
@@ -192,6 +217,11 @@
             <input id="logo-upload" type="file" accept="image/png,image/svg+xml,image/jpeg,image/webp" hidden>
           </div>
           <label class="check"><input id="logo-remove-white" type="checkbox" checked><span data-i18n="f.logo.removeWhite"></span></label>
+          <div class="seg seg-full mt-s">
+            <button class="seg-btn active" data-logo-color="mono" type="button" data-i18n="f.logoColor.mono"></button>
+            <button class="seg-btn" data-logo-color="original" type="button" data-i18n="f.logoColor.original"></button>
+          </div>
+          <p class="hint" data-i18n="f.logoColor.hint"></p>
         </div>
         <div class="field">
           <label data-i18n="f.style"></label>
@@ -208,6 +238,65 @@
           <label for="frame-size"><span data-i18n="f.frameSize"></span> <span id="frame-size-val" class="muted"></span></label>
           <input id="frame-size" type="range" min="6" max="18" step="1" value="10">
           <p class="hint" data-i18n="f.frameSize.hint"></p>
+        </div>
+      </section>
+
+      <section class="group" data-tab="frame">
+        <h2 data-i18n="sec.signature"></h2>
+        <div class="field">
+          <div class="seg seg-full">
+            <button class="seg-btn active" data-sig-kind="none" type="button" data-i18n="sig.none"></button>
+            <button class="seg-btn" data-sig-kind="text" type="button" data-i18n="sig.text"></button>
+            <button class="seg-btn" data-sig-kind="image" type="button" data-i18n="sig.image"></button>
+          </div>
+        </div>
+        <div class="sig-only sig-text-only">
+          <div class="field"><label for="sig-text" data-i18n="sig.textLabel"></label><input id="sig-text" data-i18n-placeholder="sig.textPlaceholder" autocomplete="off"></div>
+          <div class="field">
+            <label for="sig-font" data-i18n="sig.font"></label>
+            <select id="sig-font">
+              <option value="script" data-i18n="sig.font.script"></option>
+              <option value="saira" data-i18n="sig.font.sans"></option>
+              <option value="serif" data-i18n="sig.font.serif"></option>
+            </select>
+          </div>
+        </div>
+        <div class="sig-only sig-image-only field">
+          <div class="row">
+            <label class="btn btn-ghost btn-sm" for="sig-upload" data-i18n="sig.upload"></label>
+            <input id="sig-upload" type="file" accept="image/png,image/svg+xml,image/jpeg,image/webp" hidden>
+            <span id="sig-file" class="muted small"></span>
+          </div>
+          <label class="check"><input id="sig-remove-white" type="checkbox" checked><span data-i18n="sig.removeWhite"></span></label>
+        </div>
+        <div class="sig-only">
+          <div class="field">
+            <label for="sig-pos" data-i18n="sig.pos"></label>
+            <select id="sig-pos">
+              <option value="photo-br" data-i18n="sig.pos.br"></option>
+              <option value="photo-bl" data-i18n="sig.pos.bl"></option>
+              <option value="photo-tr" data-i18n="sig.pos.tr"></option>
+              <option value="photo-tl" data-i18n="sig.pos.tl"></option>
+              <option value="frame" data-i18n="sig.pos.frame"></option>
+            </select>
+          </div>
+          <div class="field">
+            <label data-i18n="sig.color"></label>
+            <div class="seg seg-full">
+              <button class="seg-btn active" data-sig-color="auto" type="button" data-i18n="sig.color.auto"></button>
+              <button class="seg-btn" data-sig-color="#ffffff" type="button" data-i18n="f.white"></button>
+              <button class="seg-btn" data-sig-color="#000000" type="button" data-i18n="f.black"></button>
+              <button class="seg-btn sig-image-only" data-sig-color="original" type="button" data-i18n="sig.color.original"></button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="sig-size"><span data-i18n="sig.size"></span> <span id="sig-size-val" class="muted"></span></label>
+            <input id="sig-size" type="range" min="2" max="15" step="0.5" value="5">
+          </div>
+          <div class="field">
+            <label for="sig-opacity"><span data-i18n="sig.opacity"></span> <span id="sig-opacity-val" class="muted"></span></label>
+            <input id="sig-opacity" type="range" min="30" max="100" step="5" value="90">
+          </div>
         </div>
       </section>
 
@@ -420,10 +509,6 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m4 17 5-4.5 3.5 3 3-2.5 4.5 4"/></svg>
       <span data-i18n="sheet.files"></span>
     </button>
-    <button class="sheet-item" type="button" data-sheet="camera">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h3l1.6-2.5h6.8L17 8.5h3v10H4z"/><circle cx="12" cy="13.2" r="3.4"/></svg>
-      <span data-i18n="sheet.camera"></span>
-    </button>
     <form id="sheet-url-form" class="sheet-url">
       <input id="sheet-url-input" type="url" inputmode="url" autocomplete="off" spellcheck="false" data-i18n-placeholder="url.placeholder" data-i18n-aria="url.placeholder">
       <button class="btn btn-primary" type="submit" data-i18n="btn.urlAdd"></button>
@@ -438,10 +523,6 @@
     <span data-i18n="footer.credit"></span>
     <span class="footer-break" aria-hidden="true"></span>
     <span><span data-i18n="footer.feedback"></span> <a href="https://github.com/Yucheng0208/Lumark" target="_blank" rel="noopener">GitHub</a> <span data-i18n="footer.feedbackAfter"></span></span>
-    <a class="kofi-btn" href="https://ko-fi.com/G3K3292RM5" target="_blank" rel="noopener">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298"/></svg>
-      <span data-i18n="kofi"></span>
-    </a>
   </footer>
 
   <button id="back-to-top" class="back-to-top" type="button" data-i18n-aria="btn.top" data-i18n-title="btn.top" hidden>
@@ -450,12 +531,12 @@
 
   <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-  <script src="assets/i18n.js?v=35"></script>
-  <script src="assets/geo.js?v=35"></script>
-  <script src="assets/frame.js?v=35"></script>
-  <script src="assets/media.js?v=35"></script>
-  <script src="assets/decode.js?v=35"></script>
-  <script src="assets/crop.js?v=35"></script>
-  <script src="assets/app.js?v=35"></script>
+  <script src="assets/i18n.js?v=37"></script>
+  <script src="assets/geo.js?v=37"></script>
+  <script src="assets/frame.js?v=37"></script>
+  <script src="assets/media.js?v=37"></script>
+  <script src="assets/decode.js?v=37"></script>
+  <script src="assets/crop.js?v=37"></script>
+  <script src="assets/app.js?v=37"></script>
 </body>
 </html>

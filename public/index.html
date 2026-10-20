@@ -22,7 +22,7 @@
     // 在載入 CSS 前套用介面主題，避免閃爍
     try { var t = localStorage.getItem('lumark.uiTheme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
   </script>
-  <link rel="stylesheet" href="assets/style.css?v=37">
+  <link rel="stylesheet" href="assets/style.css?v=45">
 </head>
 <body>
   <!-- 開場載入畫面 -->
@@ -102,7 +102,7 @@
         <svg class="mobile-only" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
         <span class="btn-label" data-i18n="btn.add"></span>
       </label>
-      <button id="save-top" class="btn btn-primary save-top mobile-only" type="button" disabled data-i18n="btn.saveShort"></button>
+      <button id="save-top" class="btn btn-primary save-top" type="button" disabled data-i18n="btn.saveShort"></button>
       <input id="file-input" type="file" accept="image/*,video/*,.mov,.mp4,.m4v,.mkv,.avi,.wmv,.webm,.flv,.mpg,.mpeg,.ts,.mts,.m2ts,.3gp,.ogv,.gif,.svg,.webp,.heic,.heif,.hif,.dng,.nef,.nrw,.cr2,.cr3,.crw,.arw,.srf,.sr2,.raf,.orf,.rw2,.rwl,.pef,.srw,.x3f,.3fr,.fff,.iiq,.erf,.mrw,.kdc,.dcr,.mos,.mef,.gpr" multiple hidden>
     </div>
   </header>
@@ -185,6 +185,14 @@
 
     <!-- 設定 -->
     <aside id="settings-panel" class="panel settings-panel" data-tab="frame">
+      <!-- 電腦版：設定分頁 -->
+      <nav class="inspector-tabs desktop-only" role="tablist" data-i18n-aria="tab.label">
+        <button class="itab" role="tab" data-tab="frame" type="button" data-i18n="tab.frame"></button>
+        <button class="itab" role="tab" data-tab="sign" type="button" data-i18n="tab.sign"></button>
+        <button class="itab" role="tab" data-tab="info" type="button" data-i18n="tab.info"></button>
+        <button class="itab" role="tab" data-tab="place" type="button" data-i18n="tab.place"></button>
+        <button class="itab" role="tab" data-tab="export" type="button" data-i18n="tab.export"></button>
+      </nav>
       <section class="group" data-tab="frame">
         <h2 data-i18n="sec.frame"></h2>
         <div class="field">
@@ -241,61 +249,111 @@
         </div>
       </section>
 
-      <section class="group" data-tab="frame">
+      <section class="group" data-tab="sign">
         <h2 data-i18n="sec.signature"></h2>
-        <div class="field">
-          <div class="seg seg-full">
-            <button class="seg-btn active" data-sig-kind="none" type="button" data-i18n="sig.none"></button>
-            <button class="seg-btn" data-sig-kind="text" type="button" data-i18n="sig.text"></button>
-            <button class="seg-btn" data-sig-kind="image" type="button" data-i18n="sig.image"></button>
-          </div>
-        </div>
-        <div class="sig-only sig-text-only">
+        <p class="hint" data-i18n="sig.dragHint"></p>
+        <div class="sig-card" id="sig-card-text">
+          <label class="switch-row">
+            <span class="switch-title" data-i18n="sig.textCard"></span>
+            <input type="checkbox" class="switch" id="sig-text-on">
+          </label>
+          <div class="sig-body">
           <div class="field"><label for="sig-text" data-i18n="sig.textLabel"></label><input id="sig-text" data-i18n-placeholder="sig.textPlaceholder" autocomplete="off"></div>
           <div class="field">
             <label for="sig-font" data-i18n="sig.font"></label>
             <select id="sig-font">
-              <option value="script" data-i18n="sig.font.script"></option>
-              <option value="saira" data-i18n="sig.font.sans"></option>
-              <option value="serif" data-i18n="sig.font.serif"></option>
+              <optgroup data-i18n-label="sig.font.cursiveGroup">
+                <option value="script" data-i18n="sig.font.script"></option>
+                <option value="dancing" data-i18n="sig.font.dancing"></option>
+                <option value="allura" data-i18n="sig.font.allura"></option>
+                <option value="sacramento" data-i18n="sig.font.sacramento"></option>
+                <option value="alexbrush" data-i18n="sig.font.alexbrush"></option>
+                <option value="pacifico" data-i18n="sig.font.pacifico"></option>
+              </optgroup>
+              <optgroup data-i18n-label="sig.font.otherGroup">
+                <option value="saira" data-i18n="sig.font.sans"></option>
+                <option value="serif" data-i18n="sig.font.serif"></option>
+              </optgroup>
             </select>
           </div>
-        </div>
-        <div class="sig-only sig-image-only field">
-          <div class="row">
-            <label class="btn btn-ghost btn-sm" for="sig-upload" data-i18n="sig.upload"></label>
-            <input id="sig-upload" type="file" accept="image/png,image/svg+xml,image/jpeg,image/webp" hidden>
-            <span id="sig-file" class="muted small"></span>
-          </div>
-          <label class="check"><input id="sig-remove-white" type="checkbox" checked><span data-i18n="sig.removeWhite"></span></label>
-        </div>
-        <div class="sig-only">
           <div class="field">
-            <label for="sig-pos" data-i18n="sig.pos"></label>
-            <select id="sig-pos">
+            <label for="sig-text-pos" data-i18n="sig.pos"></label>
+            <select id="sig-text-pos">
               <option value="photo-br" data-i18n="sig.pos.br"></option>
               <option value="photo-bl" data-i18n="sig.pos.bl"></option>
               <option value="photo-tr" data-i18n="sig.pos.tr"></option>
               <option value="photo-tl" data-i18n="sig.pos.tl"></option>
               <option value="frame" data-i18n="sig.pos.frame"></option>
+              <option value="custom" data-i18n="sig.pos.custom"></option>
             </select>
           </div>
           <div class="field">
             <label data-i18n="sig.color"></label>
-            <div class="seg seg-full">
-              <button class="seg-btn active" data-sig-color="auto" type="button" data-i18n="sig.color.auto"></button>
-              <button class="seg-btn" data-sig-color="#ffffff" type="button" data-i18n="f.white"></button>
-              <button class="seg-btn" data-sig-color="#000000" type="button" data-i18n="f.black"></button>
-              <button class="seg-btn sig-image-only" data-sig-color="original" type="button" data-i18n="sig.color.original"></button>
+            <div class="color-row">
+              <button class="chip-color" data-sig-color="auto" data-sig="text" type="button" data-i18n="sig.color.auto"></button>
+              
+              <button class="swatch" data-sig-color="#ffffff" data-sig="text" type="button" style="--sw:#ffffff" data-i18n-aria="f.white"></button>
+              <button class="swatch" data-sig-color="#000000" data-sig="text" type="button" style="--sw:#000000" data-i18n-aria="f.black"></button>
+              <label class="swatch swatch-picker" data-i18n-title="f.colorPicker"><input type="color" class="sig-color-picker" data-sig="text" value="#ffffff" data-i18n-aria="f.colorPicker"></label>
+              <input class="color-text sig-color-text" data-sig="text" type="text" autocomplete="off" spellcheck="false" placeholder="#FFFFFF" data-i18n-aria="f.colorText">
             </div>
           </div>
           <div class="field">
-            <label for="sig-size"><span data-i18n="sig.size"></span> <span id="sig-size-val" class="muted"></span></label>
-            <input id="sig-size" type="range" min="2" max="15" step="0.5" value="5">
+            <label for="sig-text-size"><span data-i18n="sig.size"></span> <span id="sig-text-size-val" class="muted"></span></label>
+            <input id="sig-text-size" type="range" min="2" max="15" step="0.5" value="5">
           </div>
           <div class="field">
-            <label for="sig-opacity"><span data-i18n="sig.opacity"></span> <span id="sig-opacity-val" class="muted"></span></label>
-            <input id="sig-opacity" type="range" min="30" max="100" step="5" value="90">
+            <label for="sig-text-opacity"><span data-i18n="sig.opacity"></span> <span id="sig-text-opacity-val" class="muted"></span></label>
+            <input id="sig-text-opacity" type="range" min="30" max="100" step="5" value="90">
+          </div>
+          <label class="check"><input id="sig-text-glass" type="checkbox"><span data-i18n="sig.glass"></span></label>
+          </div>
+        </div>
+        <div class="sig-card" id="sig-card-image">
+          <label class="switch-row">
+            <span class="switch-title" data-i18n="sig.imageCard"></span>
+            <input type="checkbox" class="switch" id="sig-image-on">
+          </label>
+          <div class="sig-body">
+          <div class="field">
+            <div class="row">
+              <label class="btn btn-ghost btn-sm" for="sig-upload" data-i18n="sig.upload"></label>
+              <input id="sig-upload" type="file" accept="image/png,image/svg+xml,image/jpeg,image/webp" hidden>
+              <span id="sig-file" class="muted small"></span>
+            </div>
+            <label class="check"><input id="sig-remove-white" type="checkbox" checked><span data-i18n="sig.removeWhite"></span></label>
+          </div>
+          <div class="field">
+            <label for="sig-image-pos" data-i18n="sig.pos"></label>
+            <select id="sig-image-pos">
+              <option value="photo-br" data-i18n="sig.pos.br"></option>
+              <option value="photo-bl" data-i18n="sig.pos.bl"></option>
+              <option value="photo-tr" data-i18n="sig.pos.tr"></option>
+              <option value="photo-tl" data-i18n="sig.pos.tl"></option>
+              <option value="frame" data-i18n="sig.pos.frame"></option>
+              <option value="custom" data-i18n="sig.pos.custom"></option>
+            </select>
+          </div>
+          <div class="field">
+            <label data-i18n="sig.color"></label>
+            <div class="color-row">
+              <button class="chip-color" data-sig-color="auto" data-sig="image" type="button" data-i18n="sig.color.auto"></button>
+              <button class="chip-color" data-sig-color="original" data-sig="image" type="button" data-i18n="sig.color.original"></button>
+              <button class="swatch" data-sig-color="#ffffff" data-sig="image" type="button" style="--sw:#ffffff" data-i18n-aria="f.white"></button>
+              <button class="swatch" data-sig-color="#000000" data-sig="image" type="button" style="--sw:#000000" data-i18n-aria="f.black"></button>
+              <label class="swatch swatch-picker" data-i18n-title="f.colorPicker"><input type="color" class="sig-color-picker" data-sig="image" value="#ffffff" data-i18n-aria="f.colorPicker"></label>
+              <input class="color-text sig-color-text" data-sig="image" type="text" autocomplete="off" spellcheck="false" placeholder="#FFFFFF" data-i18n-aria="f.colorText">
+            </div>
+          </div>
+          <div class="field">
+            <label for="sig-image-size"><span data-i18n="sig.size"></span> <span id="sig-image-size-val" class="muted"></span></label>
+            <input id="sig-image-size" type="range" min="2" max="15" step="0.5" value="5">
+          </div>
+          <div class="field">
+            <label for="sig-image-opacity"><span data-i18n="sig.opacity"></span> <span id="sig-image-opacity-val" class="muted"></span></label>
+            <input id="sig-image-opacity" type="range" min="30" max="100" step="5" value="90">
+          </div>
+          <label class="check"><input id="sig-image-glass" type="checkbox"><span data-i18n="sig.glass"></span></label>
           </div>
         </div>
       </section>
@@ -342,8 +400,8 @@
           <div class="field"><label for="f-iso" data-i18n="f.iso"></label><input id="f-iso" data-key="iso" inputmode="numeric"></div>
           <div class="field"><label for="f-fnum" data-i18n="f.fnum"></label><input id="f-fnum" data-key="fnum" inputmode="decimal"></div>
           <div class="field"><label for="f-exposure" data-i18n="f.exposure"></label><input id="f-exposure" data-key="exposure"></div>
-          <div class="field"><label for="f-date" data-i18n="f.date"></label><input id="f-date" data-key="date" placeholder="YYYY/MM/DD"></div>
-          <div class="field"><label for="f-time" data-i18n="f.time"></label><input id="f-time" data-key="time" placeholder="HH:MM"></div>
+          <div class="field"><label for="f-date" data-i18n="f.date"></label><input id="f-date" data-key="date" type="date" class="picker-input"></div>
+          <div class="field"><label for="f-time" data-i18n="f.time"></label><input id="f-time" data-key="time" type="time" class="picker-input"></div>
         </div>
       </section>
 
@@ -435,18 +493,21 @@
           <input id="quality" type="range" min="70" max="100" step="1" value="95">
           <p class="hint" data-i18n="f.format.hint"></p>
         </div>
-        <div class="export-row">
-          <button id="export-one" class="btn btn-primary" type="button" disabled data-i18n="btn.exportOne"></button>
-          <button id="save-device" class="btn btn-primary" type="button" disabled data-i18n="btn.save"></button>
-          <button id="print-one" class="btn btn-secondary" type="button" disabled data-i18n="btn.print"></button>
-          <button id="export-all" class="btn btn-secondary" type="button" disabled data-i18n="btn.exportAll"></button>
-        </div>
-        <progress id="progress" class="progress" max="100" value="0" hidden></progress>
-        <div class="row">
-          <p id="status" class="status muted"></p>
-          <button id="cancel-export" class="btn btn-ghost btn-sm" type="button" hidden data-i18n="btn.cancel"></button>
-        </div>
       </section>
+      <!-- 輸出按鈕：電腦版固定在面板底部，手機版只在「輸出」分頁顯示 -->
+      <div class="export-dock">
+          <div class="export-row">
+            <button id="export-one" class="btn btn-primary" type="button" disabled data-i18n="btn.exportOne"></button>
+            <button id="save-device" class="btn btn-primary" type="button" disabled data-i18n="btn.save"></button>
+            <button id="print-one" class="btn btn-secondary" type="button" disabled data-i18n="btn.print"></button>
+            <button id="export-all" class="btn btn-secondary" type="button" disabled data-i18n="btn.exportAll"></button>
+          </div>
+          <progress id="progress" class="progress" max="100" value="0" hidden></progress>
+          <div class="row">
+            <p id="status" class="status muted"></p>
+            <button id="cancel-export" class="btn btn-ghost btn-sm" type="button" hidden data-i18n="btn.cancel"></button>
+          </div>
+      </div>
       <!-- 手機版「更多」分頁：介面設定與關於 -->
       <section class="group mobile-only" data-tab="more">
         <h2 data-i18n="tab.more"></h2>
@@ -482,6 +543,10 @@
     <button class="tab" role="tab" data-tab="frame" type="button">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="2.5"/><path d="M3.5 15.5h17"/></svg>
       <span data-i18n="tab.frame"></span>
+    </button>
+    <button class="tab" role="tab" data-tab="sign" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 17.5c2-3.5 3.6-9.5 6-9.5 2.3 0-.6 8.2 1.6 8.2 1.6 0 2.4-3.4 3.9-3.4 1.2 0 1 2.4 2.3 2.4.8 0 1.6-.8 3.2-1.8M3.5 20.5h17"/></svg>
+      <span data-i18n="tab.sign"></span>
     </button>
     <button class="tab" role="tab" data-tab="info" type="button">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.6v.2"/></svg>
@@ -531,12 +596,12 @@
 
   <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-  <script src="assets/i18n.js?v=37"></script>
-  <script src="assets/geo.js?v=37"></script>
-  <script src="assets/frame.js?v=37"></script>
-  <script src="assets/media.js?v=37"></script>
-  <script src="assets/decode.js?v=37"></script>
-  <script src="assets/crop.js?v=37"></script>
-  <script src="assets/app.js?v=37"></script>
+  <script src="assets/i18n.js?v=45"></script>
+  <script src="assets/geo.js?v=45"></script>
+  <script src="assets/frame.js?v=45"></script>
+  <script src="assets/media.js?v=45"></script>
+  <script src="assets/decode.js?v=45"></script>
+  <script src="assets/crop.js?v=45"></script>
+  <script src="assets/app.js?v=45"></script>
 </body>
 </html>

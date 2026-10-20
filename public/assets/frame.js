@@ -488,10 +488,21 @@
   /* ---------- 繪製 ---------- */
 
   const FONT_STACK = 'Saira, "PingFang TC", "Hiragino Sans", "Noto Sans TC", "Noto Sans JP", "Microsoft JhengHei", sans-serif';
+  // 英文草寫字體（Google Fonts，選用時才載入）；中文字會自動改用系統字體顯示
+  const CURSIVE_FALLBACK = '"Snell Roundhand", "Segoe Script", cursive';
   const SIGNATURE_FONTS = {
     saira: FONT_STACK,
     serif: '"Times New Roman", "Songti TC", "Noto Serif TC", serif',
-    script: '"Great Vibes", "Snell Roundhand", "Segoe Script", cursive',
+    script: `"Great Vibes", ${CURSIVE_FALLBACK}`,
+    dancing: `"Dancing Script", ${CURSIVE_FALLBACK}`,
+    allura: `"Allura", ${CURSIVE_FALLBACK}`,
+    sacramento: `"Sacramento", ${CURSIVE_FALLBACK}`,
+    alexbrush: `"Alex Brush", ${CURSIVE_FALLBACK}`,
+    pacifico: `"Pacifico", ${CURSIVE_FALLBACK}`,
+  };
+  const WEB_FONTS = {
+    script: 'Great Vibes', dancing: 'Dancing Script', allura: 'Allura',
+    sacramento: 'Sacramento', alexbrush: 'Alex Brush', pacifico: 'Pacifico',
   };
 
   /**
@@ -557,7 +568,8 @@
     } else if (bar > 0) {
       drawClassic();
     }
-    if (opts.signature) drawSignature(opts.signature);
+    L.sigBoxes = {};
+    (opts.signatures || []).forEach((sg) => { const box = drawSignature(sg); if (box) L.sigBoxes[sg.id] = box; });
     return L;
 
     function drawLines(arr, x, fontSize, lineGap, align) {
@@ -633,61 +645,150 @@
     }
 
     /**
-     * 作者簽名：文字或圖片
-     * sig = { kind: 'text'|'image', text, font, image, pos, sizePct, opacity, color }
-     * pos：photo-br／photo-bl／photo-tr／photo-tl（相片四角）、frame（邊框：經典版型在中央，置中版型在右側）
+     * 作者簽名（文字與圖片可同時存在）
+     * sg = { id, kind: 'text'|'image', text, font, image, pos, x, y, sizePct, opacity, color, glass }
+     * pos：photo-br／photo-bl／photo-tr／photo-tl（相片四角）、frame（邊框上）、custom（拖曳後的位置，
+     *      x、y 為整張圖寬高的比例，代表簽名中心點）
+     * color：auto（相片上白色、邊框上跟著文字顏色）、original（圖片原色）、或任何 HEX 顏色
+     * 回傳在整張圖上的位置 {x, y, w, h}，給拖曳使用
      */
-    function drawSignature(sig) {
+    function drawSignature(sg) {
       const short = Math.min(W, H);
-      const onFrame = sig.pos === 'frame' && bar > 0;
-      const h = onFrame ? Math.round(bar * Math.min(0.55, Math.max(0.2, sig.sizePct / 10))) : Math.round(short * sig.sizePct / 100);
-      if (h <= 0) return;
+      const onFrame = sg.pos === 'frame' && bar > 0;
+      const h = onFrame ? Math.round(bar * Math.min(0.55, Math.max(0.2, sg.sizePct / 10))) : Math.round(short * sg.sizePct / 100);
+      if (h <= 0) return null;
       const margin = Math.round(short * 0.03);
-      // 顏色：auto 在相片上用白色（加陰影），在邊框上跟著文字顏色
-      let color = sig.color;
-      if (!color || color === 'auto') color = onFrame ? theme.text : '#ffffff';
 
-      let mark; // 要畫的 canvas
-      if (sig.kind === 'image' && sig.image) {
-        mark = sig.color === 'original' ? sig.image : tint(sig.image, color);
-      } else if (sig.kind === 'text' && sig.text) {
+      let color = sg.color;
+      const inFrameArea = onFrame || (sg.pos === 'custom' && sg.y * L.height > barTop && bar > 0);
+      if (!color || color === 'auto') color = inFrameArea ? theme.text : '#ffffff';
+
+      let mark;
+      if (sg.kind === 'image' && sg.image) {
+        mark = color === 'original' ? sg.image : tint(sg.image, color);
+      } else if (sg.kind === 'text' && sg.text) {
         mark = document.createElement('canvas');
         const mctx = mark.getContext('2d');
-        const f = `${sig.font === 'saira' ? 600 : 400} ${h}px ${SIGNATURE_FONTS[sig.font] || FONT_STACK}`;
+        const weight = sg.font === 'saira' ? 600 : sg.font === 'dancing' ? 600 : 400;
+        const f = `${weight} ${h}px ${SIGNATURE_FONTS[sg.font] || FONT_STACK}`;
         mctx.font = f;
-        mark.width = Math.ceil(mctx.measureText(sig.text).width + h * 0.4);
+        mark.width = Math.ceil(mctx.measureText(sg.text).width + h * 0.4);
         mark.height = Math.ceil(h * 1.5);
         mctx.font = f;
         mctx.textBaseline = 'middle';
         mctx.fillStyle = color;
-        mctx.fillText(sig.text, h * 0.2, mark.height / 2);
+        mctx.fillText(sg.text, h * 0.2, mark.height / 2);
         mark = trimTransparent(mark);
       }
-      if (!mark || !mark.width) return;
+      if (!mark || !mark.width) return null;
       let mw = Math.round(h / mark.height * mark.width), mh = h;
       const maxW = onFrame ? Math.round(W * 0.3) : Math.round(W * 0.6);
       if (mw > maxW) { mh = Math.round(mh * maxW / mw); mw = maxW; }
 
-      let x, y;
-      if (onFrame) {
-        x = opts.layout === 'center' ? right - mw : Math.round(L.width / 2 - mw / 2);
-        y = barTop + Math.round((bar - mh) / 2);
+      // 玻璃底板的留白
+      const gx = sg.glass ? Math.round(mh * 0.5) : 0;
+      const gy = sg.glass ? Math.round(mh * 0.32) : 0;
+      const bw = mw + gx * 2, bh = mh + gy * 2;
+
+      let x, y; // 外框（含玻璃）左上角
+      if (sg.pos === 'custom') {
+        x = Math.round(sg.x * L.width - bw / 2);
+        y = Math.round(sg.y * L.height - bh / 2);
+        x = Math.max(0, Math.min(L.width - bw, x));
+        y = Math.max(0, Math.min(L.height - bh, y));
+      } else if (onFrame) {
+        x = opts.layout === 'center' ? right - bw : Math.round(L.width / 2 - bw / 2);
+        y = barTop + Math.round((bar - bh) / 2);
       } else {
-        const x0 = L.imgX + margin, x1 = L.imgX + W - margin - mw;
-        const y0 = L.imgY + margin, y1 = L.imgY + H - margin - mh;
-        x = /l$/.test(sig.pos) ? x0 : x1;
-        y = /^photo-t/.test(sig.pos) ? y0 : y1;
+        const x0 = L.imgX + margin, x1 = L.imgX + W - margin - bw;
+        const y0 = L.imgY + margin, y1 = L.imgY + H - margin - bh;
+        x = /l$/.test(sg.pos) ? x0 : x1;
+        y = /^photo-t/.test(sg.pos) ? y0 : y1;
       }
+
+      if (sg.glass) drawGlass(x, y, bw, bh, inFrameArea, color);
+
       ctx.save();
-      ctx.globalAlpha = Math.max(0.1, Math.min(1, sig.opacity));
-      if (!onFrame && color === '#ffffff' && sig.color !== 'original') {
+      ctx.globalAlpha = Math.max(0.1, Math.min(1, sg.opacity));
+      if (!sg.glass && !inFrameArea && color === '#ffffff') {
         ctx.shadowColor = 'rgba(0,0,0,.45)';
-        ctx.shadowBlur = Math.max(2, h * 0.08);
+        ctx.shadowBlur = Math.max(2, mh * 0.08) * scale;
       }
-      ctx.drawImage(mark, Math.round(x), Math.round(y), mw, mh);
+      ctx.drawImage(mark, x + gx, y + gy, mw, mh);
+      ctx.restore();
+      return { x, y, w: bw, h: bh };
+    }
+
+    function roundRectPath(x, y, w, h, r) {
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+      else {
+        ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+      }
+    }
+
+    /**
+     * 毛玻璃底板：模糊底下的相片、加上半透明亮面與邊緣高光。
+     * 影片疊圖（overlayOnly）無法模糊底下的畫面，只保留半透明亮面。
+     */
+    function drawGlass(x, y, w, h, inFrameArea, markColor) {
+      const r = Math.min(h / 2, w / 2);
+      const darkMark = markColor !== 'original' && isDark(markColor); // 深色簽名配較亮的玻璃
+      ctx.save();
+      // 柔和陰影
+      roundRectPath(x, y, w, h, r);
+      ctx.shadowColor = 'rgba(0,0,0,.18)';
+      ctx.shadowBlur = h * 0.35 * scale;
+      ctx.shadowOffsetY = h * 0.06 * scale;
+      ctx.fillStyle = 'rgba(255,255,255,0.01)';
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      roundRectPath(x, y, w, h, r);
+      ctx.clip();
+      if (!opts.overlayOnly && 'filter' in ctx) {
+        const blur = Math.max(3, Math.round(h * 0.22));
+        const pad = blur * 3;
+        // 只模糊簽名底下那一小塊（換算回原圖座標）
+        const ix0 = Math.max(L.imgX, x - pad), iy0 = Math.max(L.imgY, y - pad);
+        const ix1 = Math.min(L.imgX + W, x + w + pad), iy1 = Math.min(L.imgY + H, y + h + pad);
+        if (ix1 > ix0 && iy1 > iy0) {
+          ctx.filter = `blur(${blur * scale}px) saturate(1.35)`;
+          ctx.drawImage(img, crop.x + (ix0 - L.imgX), crop.y + (iy0 - L.imgY), ix1 - ix0, iy1 - iy0, ix0, iy0, ix1 - ix0, iy1 - iy0);
+          ctx.filter = 'none';
+        }
+      }
+      const g = ctx.createLinearGradient(x, y, x, y + h);
+      if (darkMark || inFrameArea) {
+        g.addColorStop(0, 'rgba(255,255,255,0.62)');
+        g.addColorStop(1, 'rgba(255,255,255,0.38)');
+      } else {
+        g.addColorStop(0, 'rgba(255,255,255,0.30)');
+        g.addColorStop(1, 'rgba(255,255,255,0.10)');
+      }
+      ctx.fillStyle = g;
+      ctx.fillRect(x, y, w, h);
+      // 上緣的光澤
+      const sheen = ctx.createLinearGradient(x, y, x + w, y + h);
+      sheen.addColorStop(0, 'rgba(255,255,255,0.28)');
+      sheen.addColorStop(0.45, 'rgba(255,255,255,0)');
+      ctx.fillStyle = sheen;
+      ctx.fillRect(x, y, w, h * 0.55);
+      ctx.restore();
+
+      ctx.save();
+      roundRectPath(x + 0.5, y + 0.5, w - 1, h - 1, r);
+      const edge = ctx.createLinearGradient(x, y, x, y + h);
+      edge.addColorStop(0, 'rgba(255,255,255,0.75)');
+      edge.addColorStop(1, 'rgba(255,255,255,0.18)');
+      ctx.strokeStyle = edge;
+      ctx.lineWidth = Math.max(1, h * 0.025);
+      ctx.stroke();
       ctx.restore();
     }
   }
 
-  window.Frame = { parseColor, colorsFor, isDark, removeWhite, trimTransparent, logoForHost, formatExposure, LOGOS, logoForMake, readExif, buildLines, getLogo, frameLayout, drawFrame, loadImage, logoCache };
+  window.Frame = { WEB_FONTS, parseColor, colorsFor, isDark, removeWhite, trimTransparent, logoForHost, formatExposure, LOGOS, logoForMake, readExif, buildLines, getLogo, frameLayout, drawFrame, loadImage, logoCache };
 })();

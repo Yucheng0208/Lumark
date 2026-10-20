@@ -14,7 +14,9 @@
     frameColor: '#ffffff', // 邊框顏色（預設白色，可選黑色或任意顏色）
     layout: 'classic',     // classic：左資訊＋右 Logo；center：資訊置中、不放 Logo
     logoColor: 'mono',     // mono：依邊框自動黑／白；original：品牌原色
-    signature: { kind: 'none', text: '', font: 'script', pos: 'photo-br', sizePct: 5, opacity: 0.9, color: 'auto' },
+    // 作者簽名：文字與圖片可以同時使用，位置可拖曳（custom 時 x、y 為整張圖的比例）
+    sigText: { on: false, text: '', font: 'script', pos: 'photo-br', x: 0.85, y: 0.85, sizePct: 5, opacity: 0.9, color: 'auto', glass: false },
+    sigImage: { on: false, pos: 'photo-bl', x: 0.15, y: 0.85, sizePct: 6, opacity: 0.9, color: 'auto', glass: false },
     framePct: 10,
     style: 'bar',        // bar：只有底部資訊列；border：另外三邊也加框
     borderPct: 4,
@@ -39,7 +41,8 @@
         ...DEFAULTS, ...s,
         show: { ...DEFAULTS.show, ...(s.show || {}) },
         video: { ...DEFAULTS.video, ...(s.video || {}) },
-        signature: { ...DEFAULTS.signature, ...(s.signature || {}) },
+        sigText: { ...DEFAULTS.sigText, ...(s.sigText || {}) },
+        sigImage: { ...DEFAULTS.sigImage, ...(s.sigImage || {}) },
       };
     } catch (e) { return structuredClone(DEFAULTS); }
   }
@@ -361,7 +364,17 @@
 
   function fillForm(p) {
     exifInputs.forEach((el) => {
-      el.value = p ? p.exif[el.dataset.key] ?? '' : '';
+      let v = p ? p.exif[el.dataset.key] ?? '' : '';
+      // 日期選擇器的值必須是 YYYY-MM-DD；時間選擇器是 HH:MM
+      if (el.dataset.key === 'date') {
+        const m = String(v).match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})/);
+        v = m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : '';
+      }
+      if (el.dataset.key === 'time') {
+        const m = String(v).match(/^(\d{1,2}):(\d{2})/);
+        v = m ? `${m[1].padStart(2, '0')}:${m[2]}` : '';
+      }
+      el.value = v;
       el.disabled = !p;
     });
     $('f-coords').value = p ? Geo.formatCoords(p.exif.lat, p.exif.lon) : '';
@@ -486,7 +499,7 @@
   function frameOpts(extra) {
     return {
       frameColor: settings.frameColor, layout: settings.layout, framePct: settings.framePct,
-      style: settings.style, borderPct: settings.borderPct, signature: signatureOpts(), ...extra,
+      style: settings.style, borderPct: settings.borderPct, signatures: signatureList(), ...extra,
     };
   }
 
@@ -496,11 +509,12 @@
 
   /* 作者簽名：圖片存在記憶體（不寫入瀏覽器儲存空間） */
   let signatureImage = null;
-  function signatureOpts() {
-    const sg = settings.signature;
-    if (sg.kind === 'text' && sg.text.trim()) return { ...sg, text: sg.text.trim() };
-    if (sg.kind === 'image' && signatureImage) return { ...sg, image: signatureImage };
-    return null;
+  function signatureList() {
+    const list = [];
+    const st = settings.sigText, si = settings.sigImage;
+    if (st.on && st.text.trim()) list.push({ ...st, id: 'text', kind: 'text', text: st.text.trim() });
+    if (si.on && signatureImage) list.push({ ...si, id: 'image', kind: 'image', image: signatureImage });
+    return list;
   }
 
   function layoutOf(crop, even) { return Frame.frameLayout(crop.w, crop.h, frameOpts({ even })); }
@@ -525,8 +539,9 @@
     const crop = cropOf(p);
     const layout = layoutOf(crop);
     const scale = Math.min(1, PREVIEW_MAX / Math.max(layout.width, layout.height), p.kind === 'photo' ? 1 : 1280 / layout.width);
-    Frame.drawFrame($('preview'), p.img, crop, linesFor(p), previewLogo, frameOpts({ scale }));
+    lastPreview = { scale, L: Frame.drawFrame($('preview'), p.img, crop, linesFor(p), previewLogo, frameOpts({ scale })) };
   }
+  let lastPreview = null;
 
   /* 影片 / GIF 預覽：持續重畫目前影格 */
   let playing = null;
@@ -992,54 +1007,91 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && picking) stopPicking(); });
   setFrameColor(settings.frameColor);
 
-  /* ---------- 作者簽名 ---------- */
+  /* ---------- 作者簽名（文字、圖片兩張卡片） ---------- */
 
-  const sig = settings.signature;
-  function syncSignatureUi() {
-    $('settings-panel').dataset.sig = sig.kind;
-    document.querySelectorAll('[data-sig-kind]').forEach((b) => b.classList.toggle('active', b.dataset.sigKind === sig.kind));
-    document.querySelectorAll('[data-sig-color]').forEach((b) => b.classList.toggle('active', b.dataset.sigColor === sig.color));
-    $('sig-size-val').textContent = `${sig.sizePct}%`;
-    $('sig-opacity-val').textContent = `${Math.round(sig.opacity * 100)}%`;
+  const SIG = { text: settings.sigText, image: settings.sigImage };
+
+  function syncSigCard(k) {
+    const sg = SIG[k];
+    $(`sig-card-${k}`).classList.toggle('on', sg.on);
+    $(`sig-${k}-on`).checked = sg.on;
+    $(`sig-${k}-pos`).value = sg.pos;
+    $(`sig-${k}-size`).value = sg.sizePct;
+    $(`sig-${k}-size-val`).textContent = `${sg.sizePct}%`;
+    $(`sig-${k}-opacity`).value = Math.round(sg.opacity * 100);
+    $(`sig-${k}-opacity-val`).textContent = `${Math.round(sg.opacity * 100)}%`;
+    $(`sig-${k}-glass`).checked = !!sg.glass;
+    document.querySelectorAll(`[data-sig="${k}"][data-sig-color]`).forEach((b) => b.classList.toggle('active', b.dataset.sigColor === sg.color));
+    const hex = /^#/.test(sg.color) ? sg.color : '';
+    const picker = document.querySelector(`.sig-color-picker[data-sig="${k}"]`);
+    const text = document.querySelector(`.sig-color-text[data-sig="${k}"]`);
+    if (hex) picker.value = hex;
+    if (document.activeElement !== text) { text.value = hex.toUpperCase(); text.classList.remove('invalid'); }
   }
-  function changeSig(patch) { Object.assign(sig, patch); saveSettings(); syncSignatureUi(); renderPreview(); }
+  function changeSig(k, patch) {
+    Object.assign(SIG[k], patch);
+    saveSettings(); syncSigCard(k); renderPreview();
+  }
 
-  // 手寫字體從 Google Fonts 載入（只在選用時載入一次）
+  // 手寫字體從 Google Fonts 載入（只在用到時載入一次）
   let scriptFontReady = null;
-  function ensureScriptFont() {
-    if (sig.font !== 'script') return Promise.resolve();
-    if (!scriptFontReady) {
+  // 草寫字體從 Google Fonts 載入：每種字體只在第一次選用時載入
+  const fontLoads = {};
+  function loadWebFont(key) {
+    const family = Frame.WEB_FONTS[key];
+    if (!family) return Promise.resolve();
+    if (!fontLoads[key]) {
       const link = document.createElement('link');
       link.rel = 'stylesheet';
-      link.href = 'https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap';
+      const weight = key === 'dancing' ? ':wght@600' : '';
+      link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(/%20/g, '+')}${weight}&display=swap`;
       document.head.appendChild(link);
-      scriptFontReady = new Promise((r) => { link.onload = r; link.onerror = r; })
-        .then(() => document.fonts.load('48px "Great Vibes"')).catch(() => {});
+      fontLoads[key] = new Promise((r) => { link.onload = r; link.onerror = r; })
+        .then(() => document.fonts.load(`${key === 'dancing' ? 600 : 400} 48px "${family}"`)).catch(() => {});
     }
-    return scriptFontReady;
+    return fontLoads[key];
+  }
+  function ensureScriptFont() {
+    if (!SIG.text.on) return Promise.resolve();
+    return loadWebFont(SIG.text.font);
   }
 
-  document.querySelectorAll('[data-sig-kind]').forEach((b) => b.addEventListener('click', () => {
-    if (b.dataset.sigKind === 'text') ensureScriptFont().then(renderPreview);
-    if (b.dataset.sigKind === 'text' && sig.color === 'original') sig.color = 'auto';
-    changeSig({ kind: b.dataset.sigKind });
-  }));
-  document.querySelectorAll('[data-sig-color]').forEach((b) => b.addEventListener('click', () => changeSig({ color: b.dataset.sigColor })));
-  $('sig-text').value = sig.text;
-  $('sig-text').addEventListener('input', (e) => changeSig({ text: e.target.value }));
-  $('sig-font').value = sig.font;
-  $('sig-font').addEventListener('change', (e) => { changeSig({ font: e.target.value }); ensureScriptFont().then(renderPreview); });
-  $('sig-pos').value = sig.pos;
-  $('sig-pos').addEventListener('change', (e) => changeSig({ pos: e.target.value }));
-  $('sig-size').value = sig.sizePct;
-  $('sig-size').addEventListener('input', (e) => changeSig({ sizePct: Number(e.target.value) }));
-  $('sig-opacity').value = Math.round(sig.opacity * 100);
-  $('sig-opacity').addEventListener('input', (e) => changeSig({ opacity: Number(e.target.value) / 100 }));
+  ['text', 'image'].forEach((k) => {
+    $(`sig-${k}-on`).addEventListener('change', (e) => { changeSig(k, { on: e.target.checked }); ensureScriptFont().then(renderPreview); });
+    $(`sig-${k}-pos`).addEventListener('change', (e) => changeSig(k, { pos: e.target.value }));
+    $(`sig-${k}-size`).addEventListener('input', (e) => changeSig(k, { sizePct: Number(e.target.value) }));
+    $(`sig-${k}-opacity`).addEventListener('input', (e) => changeSig(k, { opacity: Number(e.target.value) / 100 }));
+    $(`sig-${k}-glass`).addEventListener('change', (e) => changeSig(k, { glass: e.target.checked }));
+    document.querySelectorAll(`[data-sig="${k}"][data-sig-color]`).forEach((b) => b.addEventListener('click', () => changeSig(k, { color: b.dataset.sigColor })));
+    document.querySelector(`.sig-color-picker[data-sig="${k}"]`).addEventListener('input', (e) => changeSig(k, { color: e.target.value }));
+    document.querySelector(`.sig-color-text[data-sig="${k}"]`).addEventListener('input', (e) => {
+      const c = Frame.parseColor(e.target.value);
+      e.target.classList.toggle('invalid', !!e.target.value.trim() && !c);
+      if (c) changeSig(k, { color: c });
+    });
+    syncSigCard(k);
+  });
 
+  $('sig-text').value = SIG.text.text;
+  $('sig-text').addEventListener('input', (e) => {
+    changeSig('text', { text: e.target.value, on: SIG.text.on || !!e.target.value.trim() });
+    ensureScriptFont().then(renderPreview);
+  });
+  $('sig-font').value = SIG.text.font;
+  $('sig-font').addEventListener('change', (e) => { changeSig('text', { font: e.target.value }); ensureScriptFont().then(renderPreview); });
+
+  // 簽名圖片：PNG、JPG、WebP、SVG 都可以；選擇顏色時整張圖會改成該顏色（SVG 也能自由調色）
   let sigFile = null;
   async function loadSignatureImage() {
-    if (!sigFile) { signatureImage = null; return; }
-    const url = URL.createObjectURL(sigFile);
+    if (!sigFile) { signatureImage = null; renderPreview(); return; }
+    let src = sigFile;
+    if (/svg/i.test(sigFile.type) || /\.svg$/i.test(sigFile.name)) {
+      // SVG 先轉成高解析度點陣，避免放大後模糊
+      const dec = await Decode.decodeSvg(sigFile);
+      src = await fetch(dec.url).then((r) => r.blob());
+      URL.revokeObjectURL(dec.url);
+    }
+    const url = URL.createObjectURL(src);
     try {
       const img = await Frame.loadImage(url);
       signatureImage = Frame.trimTransparent($('sig-remove-white').checked ? Frame.removeWhite(img) : img);
@@ -1050,12 +1102,61 @@
     sigFile = e.target.files[0] || null;
     e.target.value = '';
     $('sig-file').textContent = sigFile ? sigFile.name : '';
-    if (sigFile && sig.kind !== 'image') changeSig({ kind: 'image' });
+    if (sigFile && !SIG.image.on) changeSig('image', { on: true });
     loadSignatureImage();
   });
   $('sig-remove-white').addEventListener('change', loadSignatureImage);
-  syncSignatureUi();
-  if (sig.kind === 'text') ensureScriptFont().then(renderPreview);
+  ensureScriptFont().then(renderPreview);
+
+  /* 在預覽上直接拖曳簽名到任何位置 */
+  let sigDrag = null;
+  function previewPoint(e) {
+    const cv = $('preview');
+    const r = cv.getBoundingClientRect();
+    if (!lastPreview || !r.width) return null;
+    const k = cv.width / r.width / lastPreview.scale; // 螢幕像素 → 整張圖座標
+    return { x: (e.clientX - r.left) * k, y: (e.clientY - r.top) * k, L: lastPreview.L };
+  }
+  function hitSignature(pt) {
+    const boxes = (pt && pt.L.sigBoxes) || {};
+    for (const id of ['text', 'image']) {
+      const b = boxes[id];
+      if (b && pt.x >= b.x && pt.x <= b.x + b.w && pt.y >= b.y && pt.y <= b.y + b.h) return { id, box: b };
+    }
+    return null;
+  }
+  $('preview').addEventListener('pointerdown', (e) => {
+    if (picking) return;
+    const pt = previewPoint(e);
+    const hit = hitSignature(pt);
+    if (!hit) return;
+    e.preventDefault();
+    $('preview').setPointerCapture(e.pointerId);
+    sigDrag = { id: hit.id, dx: pt.x - (hit.box.x + hit.box.w / 2), dy: pt.y - (hit.box.y + hit.box.h / 2) };
+    document.body.classList.add('dragging-sig');
+  });
+  $('preview').addEventListener('pointermove', (e) => {
+    const pt = previewPoint(e);
+    if (!pt) return;
+    if (!sigDrag) { document.body.classList.toggle('over-sig', !picking && !!hitSignature(pt)); return; }
+    const sg = SIG[sigDrag.id];
+    sg.pos = 'custom';
+    sg.x = Math.max(0, Math.min(1, (pt.x - sigDrag.dx) / pt.L.width));
+    sg.y = Math.max(0, Math.min(1, (pt.y - sigDrag.dy) / pt.L.height));
+    $(`sig-${sigDrag.id}-pos`).value = 'custom';
+    const p = active();
+    if (p) requestAnimationFrame(() => drawPreviewFrame(p));
+  });
+  const endDrag = () => {
+    if (!sigDrag) return;
+    sigDrag = null;
+    document.body.classList.remove('dragging-sig');
+    saveSettings();
+    renderPreview();
+  };
+  $('preview').addEventListener('pointerup', endDrag);
+  $('preview').addEventListener('pointercancel', endDrag);
+  $('preview').style.touchAction = 'none';
 
   bindSeg('data-style', 'style');
   document.querySelectorAll('[data-style]').forEach((b) => b.addEventListener('click', () => {
@@ -1138,6 +1239,15 @@
     // 自己修改地點或溫度就改為手動，之後不會被自動偵測覆蓋
     if (el.dataset.key === 'location' || el.dataset.key === 'temp') setManual(p);
     renderPreview();
+  }));
+
+  // 改了拍攝日期或時間：自動模式下依新的時間重新查詢當時天氣
+  let weatherTimer = 0;
+  ['f-date', 'f-time'].forEach((id) => $(id).addEventListener('change', () => {
+    const p = active();
+    if (!p || !p.weatherAuto || p.exif.lat == null) return;
+    clearTimeout(weatherTimer);
+    weatherTimer = setTimeout(() => detectPlace(p), 400);
   }));
 
   $('f-weather').addEventListener('input', (e) => {
@@ -1278,15 +1388,16 @@
   const isPhoneLayout = () => matchMedia('(max-width: 720px)').matches;
 
   function setTab(name) {
+    if (name === 'more' && !isPhoneLayout()) name = 'frame'; // 電腦版的介面設定在頂部列
     $('settings-panel').dataset.tab = name;
-    document.querySelectorAll('#tabbar .tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+    document.querySelectorAll('#tabbar .tab, .inspector-tabs .itab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     $('settings-panel').scrollTop = 0;
     try { localStorage.setItem('lumark.tab', name); } catch (e) { /* ignore */ }
   }
-  document.querySelectorAll('#tabbar .tab').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
+  document.querySelectorAll('#tabbar .tab, .inspector-tabs .itab').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
   let savedTab = 'frame';
   try { savedTab = localStorage.getItem('lumark.tab') || 'frame'; } catch (e) { /* ignore */ }
-  setTab(['frame', 'info', 'place', 'export', 'more'].includes(savedTab) ? savedTab : 'frame');
+  setTab(['frame', 'sign', 'info', 'place', 'export', 'more'].includes(savedTab) ? savedTab : 'frame');
 
   const sheet = $('add-sheet');
   function openAddSheet() {

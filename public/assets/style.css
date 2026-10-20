@@ -230,10 +230,6 @@ h2 { font-size: 13px; margin: 0 0 10px; font-weight: 650; }
 .icon-btn { width: 36px; padding: 0; }
 .icon-btn.active { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
 .picking #preview { cursor: crosshair; }
-.sig-only { display: none; }
-[data-sig="text"] .sig-only:not(.sig-image-only), [data-sig="image"] .sig-only:not(.sig-text-only) { display: block; }
-[data-sig="text"] .sig-image-only { display: none !important; }
-[data-sig="image"] .seg-btn.sig-image-only { display: inline-block; }
 [data-layout-mode="center"] .logo-field { opacity: .45; }
 
 .canvas-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 8px 16px 16px; }
@@ -285,6 +281,10 @@ h2 { font-size: 13px; margin: 0 0 10px; font-weight: 650; }
   border: 1px solid var(--border); border-radius: 7px; padding: 7px 9px; min-width: 0;
 }
 .field input:focus, .field select:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+.picker-input { min-height: 36px; font-variant-numeric: tabular-nums; }
+.picker-input::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .7; }
+:root[data-theme="dark"] .picker-input::-webkit-calendar-picker-indicator { filter: invert(1); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .picker-input::-webkit-calendar-picker-indicator { filter: invert(1); } }
 .field input[type=range] { width: 100%; accent-color: var(--primary); }
 .row { display: flex; align-items: center; gap: 8px; }
 .row.wrap { flex-wrap: wrap; }
@@ -311,11 +311,124 @@ h2 { font-size: 13px; margin: 0 0 10px; font-weight: 650; }
 .check { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; margin-top: 10px; cursor: pointer; }
 .check input { margin: 2px 0 0; accent-color: var(--primary); }
 
-/* tablet: settings move below */
-@media (max-width: 1100px) {
-  .layout { grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: minmax(420px, 1fr) auto; }
-  .settings-panel { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
-  .settings-panel .group + .group { margin-top: 0; }
+/* ---------- 平板（721–1100px）：左邊預覽＋縮圖列，右邊完整高度的設定面板 ---------- */
+@media (max-width: 1100px) and (min-width: 721px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 330px;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 10px; padding: 10px;
+  }
+  .stage-panel { grid-column: 1; grid-row: 1; min-height: 0; }
+  .settings-panel { grid-column: 2; grid-row: 1 / span 2; min-height: 0; overflow-y: auto; }
+
+  /* 相片列表改成預覽下方的橫向縮圖列 */
+  .list-panel {
+    grid-column: 1; grid-row: 2; display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; overflow: hidden;
+  }
+  .list-panel .panel-head { order: 2; margin: 0; flex: none; }
+  .list-panel .panel-head h2 { display: none; }
+  .list-panel .photo-list {
+    order: 1; flex: 1; min-width: 0; flex-direction: row; overflow-x: auto; gap: 8px; padding: 2px; scrollbar-width: thin;
+  }
+  .list-panel .photo-item { grid-template-columns: 1fr; position: relative; padding: 2px; flex: none; }
+  .list-panel .photo-item img { width: 60px; height: 60px; border-radius: 8px; }
+  .list-panel .photo-item .name, .list-panel .photo-item .meta { display: none; }
+  .list-panel .photo-item .remove {
+    position: absolute; top: -4px; right: -4px; width: 22px; height: 22px; font-size: 14px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 50%;
+  }
+  .list-panel .url-form { order: 3; flex: 0 1 220px; margin: 0; }
+  .list-panel .url-hint { display: none; }
+  .list-panel:has(.photo-list:empty) .photo-list { display: none; }
+  .list-panel:has(.photo-list:empty) .url-form { flex: 1 1 auto; }
+
+  .itab { font-size: 12px; padding: 8px 2px 10px; }
+  .export-dock .export-row { grid-template-columns: 1fr 1fr; }
+}
+
+/* 直式平板：預覽在上、縮圖列、設定面板在下 */
+@media (max-width: 1100px) and (min-width: 721px) and (orientation: portrait) {
+  .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: 44% auto minmax(0, 1fr); }
+  .stage-panel { grid-column: 1; grid-row: 1; }
+  .list-panel { grid-column: 1; grid-row: 2; }
+  .settings-panel { grid-column: 1; grid-row: 3; }
+  .export-dock .export-row { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* 觸控裝置（平板、手機）：按鈕與輸入框加大，方便手指操作 */
+@media (pointer: coarse) {
+  .btn { min-height: 42px; }
+  .btn-sm { min-height: 36px; }
+  .seg-btn { min-height: 38px; }
+  .toggle span { padding: 8px 14px; font-size: 13px; }
+  .field input:not([type=range]):not([type=checkbox]):not([type=color]), .field select, .color-text { font-size: 16px; min-height: 40px; }
+  input[type=range] { height: 28px; }
+  .itab { min-height: 44px; }
+  .swatch { width: 36px; height: 36px; }
+}
+
+/* ---------- 設定分頁（電腦與手機共用）---------- */
+.settings-panel .group { display: none; }
+.settings-panel[data-tab="frame"] .group[data-tab="frame"],
+.settings-panel[data-tab="sign"] .group[data-tab="sign"],
+.settings-panel[data-tab="info"] .group[data-tab="info"],
+.settings-panel[data-tab="place"] .group[data-tab="place"],
+.settings-panel[data-tab="export"] .group[data-tab="export"],
+.settings-panel[data-tab="more"] .group[data-tab="more"] { display: block; animation: tab-in .2s ease; }
+.settings-panel .group[hidden] { display: none !important; }
+.settings-panel .group + .group { margin-top: 22px; }
+
+/* 電腦版：設定面板上方的分頁、下方固定的輸出按鈕 */
+.settings-panel { display: flex; flex-direction: column; padding-top: 0; padding-bottom: 0; }
+.inspector-tabs {
+  position: sticky; top: 0; z-index: 3; display: flex; gap: 2px;
+  margin: 0 -14px 14px; padding: 10px 10px 0; background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.itab {
+  flex: 1; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600;
+  padding: 8px 4px 10px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap;
+}
+.itab:hover { color: var(--text); }
+.itab[aria-selected="true"] { color: var(--primary); border-bottom-color: var(--primary); }
+.settings-panel > .group { flex: none; }
+.export-dock {
+  position: sticky; bottom: 0; z-index: 3; margin: auto -14px 0; padding: 12px 14px 14px;
+  background: var(--panel); border-top: 1px solid var(--border);
+}
+.export-dock .status { margin-top: 6px; }
+.export-dock .export-row .btn { padding: 8px 10px; }
+
+/* 作者簽名卡片 */
+.sig-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-top: 12px; background: var(--bg); }
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; }
+.switch-title { font-weight: 650; }
+.sig-body { margin-top: 12px; }
+.sig-card:not(.on) .sig-body { display: none; }
+.switch {
+  appearance: none; -webkit-appearance: none; width: 40px; height: 24px; border-radius: 999px; margin: 0; flex: none;
+  background: var(--border); position: relative; cursor: pointer; transition: background .15s;
+}
+.switch::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .15s;
+}
+.switch:checked { background: var(--primary); }
+.switch:checked::after { transform: translateX(16px); }
+.switch:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.chip-color {
+  border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 999px;
+  padding: 5px 11px; font: inherit; font-size: 12px; cursor: pointer;
+}
+.chip-color.active { background: var(--primary); border-color: var(--primary); color: var(--primary-text); }
+.color-row .color-text { min-width: 90px; }
+.dragging-sig #preview { cursor: grabbing; }
+.over-sig #preview { cursor: grab; }
+
+/* 頂部：加入改為次要按鈕，下載為主要按鈕 */
+@media (min-width: 721px) {
+  .add-btn { background: var(--hover); color: var(--text); border: 1px solid var(--border); }
+  .add-btn:hover { background: var(--active); }
 }
 
 /* 預覽區的讀取提示 */
@@ -402,19 +515,13 @@ h2 { font-size: 13px; margin: 0 0 10px; font-weight: 650; }
   .list-panel:has(.photo-list:empty) { display: none; }
 
   .settings-panel {
-    order: 3; flex: 1; min-height: 0; overflow-y: auto; display: block;
+    order: 3; flex: 1; min-height: 0; overflow-y: auto; display: flex;
     border-radius: 0; border: 0; padding: 16px 16px 28px;
     -webkit-overflow-scrolling: touch;
   }
-  /* 依底部分頁只顯示對應的設定 */
-  .settings-panel .group { display: none; }
-  .settings-panel[data-tab="frame"] .group[data-tab="frame"],
-  .settings-panel[data-tab="info"] .group[data-tab="info"],
-  .settings-panel[data-tab="place"] .group[data-tab="place"],
-  .settings-panel[data-tab="export"] .group[data-tab="export"],
-  .settings-panel[data-tab="more"] .group[data-tab="more"] { display: block; animation: tab-in .2s ease; }
-  .settings-panel .group[hidden] { display: none !important; }
-  .settings-panel .group + .group { margin-top: 26px; }
+  .desktop-only { display: none !important; }
+  .settings-panel:not([data-tab="export"]) .export-dock { display: none; }
+  .export-dock { margin: 18px -16px -28px; padding: 12px 16px 16px; }
   .settings-panel h2 { font-size: 15px; margin-bottom: 12px; }
 
   /* 觸控尺寸；輸入框 16px 避免 iOS 自動放大 */

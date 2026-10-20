@@ -1,5 +1,7 @@
 # Lumark (光印)
 
+**Live site: https://lumark.yucheng208.net**
+
 A web tool that adds a camera-info frame to your photos and videos. Everything runs in the browser, so your files are never uploaded.
 The interface is available in Traditional Chinese, English and Japanese and follows your browser language. Visitors whose language isn't supported get a suggestion to use Google Translate.
 
@@ -43,6 +45,8 @@ npx wrangler login
 ```bash
 npm run deploy
 ```
+
+The Worker is served at the custom domain `lumark.yucheng208.net` (set under `routes` in `wrangler.jsonc`).
 
 ## Project structure
 

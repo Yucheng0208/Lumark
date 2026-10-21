@@ -22,7 +22,7 @@
     // 在載入 CSS 前套用介面主題，避免閃爍
     try { var t = localStorage.getItem('lumark.uiTheme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
   </script>
-  <link rel="stylesheet" href="assets/style.css?v=45">
+  <link rel="stylesheet" href="assets/style.css?v=48">
 </head>
 <body>
   <!-- 開場載入畫面 -->
@@ -317,6 +317,10 @@
           <div class="sig-body">
           <div class="field">
             <div class="row">
+              <button id="sig-draw" class="btn btn-primary btn-sm" type="button">
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 20c3-1 5-6 7-6s0 5 2 5 3-3 5-3M14.5 4.5l5 5L11 18H6v-5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span data-i18n="pad.open"></span>
+              </button>
               <label class="btn btn-ghost btn-sm" for="sig-upload" data-i18n="sig.upload"></label>
               <input id="sig-upload" type="file" accept="image/png,image/svg+xml,image/jpeg,image/webp" hidden>
               <span id="sig-file" class="muted small"></span>
@@ -566,6 +570,42 @@
     </button>
   </nav>
 
+  <!-- 手寫簽名板 -->
+  <dialog id="sign-pad" class="pad-dialog" aria-labelledby="pad-title">
+    <div class="pad-head">
+      <h2 id="pad-title" data-i18n="pad.title"></h2>
+      <button id="pad-cancel" class="btn btn-ghost btn-sm" type="button" data-i18n="btn.cancel"></button>
+    </div>
+    <div class="pad-tools">
+      <div class="seg">
+        <button class="seg-btn active" data-pad-brush="pen" type="button" data-i18n="pad.pen"></button>
+        <button class="seg-btn" data-pad-brush="marker" type="button" data-i18n="pad.marker"></button>
+        <button class="seg-btn" data-pad-brush="brush" type="button" data-i18n="pad.brush"></button>
+      </div>
+      <div class="color-row">
+        <button class="swatch active" data-pad-color="#111111" type="button" style="--sw:#111111" data-i18n-aria="f.black"></button>
+        <button class="swatch" data-pad-color="#ffffff" type="button" style="--sw:#ffffff" data-i18n-aria="f.white"></button>
+        <button class="swatch" data-pad-color="#1f4fd8" type="button" style="--sw:#1f4fd8" aria-label="Blue"></button>
+        <button class="swatch" data-pad-color="#c62828" type="button" style="--sw:#c62828" aria-label="Red"></button>
+        <button class="swatch" data-pad-color="#e9a23b" type="button" style="--sw:#e9a23b" aria-label="Gold"></button>
+        <label class="swatch swatch-picker" data-i18n-title="f.colorPicker"><input id="pad-color-picker" type="color" value="#111111" data-i18n-aria="f.colorPicker"></label>
+      </div>
+      <label class="pad-size"><span data-i18n="pad.size"></span>
+        <input id="pad-size" type="range" min="1" max="12" step="0.5" value="4"><span id="pad-size-val" class="muted"></span>
+      </label>
+    </div>
+    <div id="pad-surface" class="pad-surface">
+      <canvas id="pad-canvas"></canvas>
+      <div class="pad-baseline" aria-hidden="true"></div>
+      <p id="pad-placeholder" class="pad-placeholder" data-i18n="pad.placeholder"></p>
+    </div>
+    <div class="pad-actions">
+      <button id="pad-undo" class="btn btn-ghost" type="button" data-i18n="pad.undo"></button>
+      <button id="pad-clear" class="btn btn-ghost" type="button" data-i18n="pad.clear"></button>
+      <button id="pad-done" class="btn btn-primary" type="button" data-i18n="pad.done"></button>
+    </div>
+  </dialog>
+
   <!-- 手機版「加入」選單 -->
   <dialog id="add-sheet" class="sheet">
     <div class="sheet-handle" aria-hidden="true"></div>
@@ -596,12 +636,13 @@
 
   <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-  <script src="assets/i18n.js?v=45"></script>
-  <script src="assets/geo.js?v=45"></script>
-  <script src="assets/frame.js?v=45"></script>
-  <script src="assets/media.js?v=45"></script>
-  <script src="assets/decode.js?v=45"></script>
-  <script src="assets/crop.js?v=45"></script>
-  <script src="assets/app.js?v=45"></script>
+  <script src="assets/i18n.js?v=48"></script>
+  <script src="assets/geo.js?v=48"></script>
+  <script src="assets/frame.js?v=48"></script>
+  <script src="assets/media.js?v=48"></script>
+  <script src="assets/decode.js?v=48"></script>
+  <script src="assets/signpad.js?v=48"></script>
+  <script src="assets/crop.js?v=48"></script>
+  <script src="assets/app.js?v=48"></script>
 </body>
 </html>

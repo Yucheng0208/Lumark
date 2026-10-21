@@ -431,6 +431,44 @@ h2 { font-size: 13px; margin: 0 0 10px; font-weight: 650; }
   .add-btn:hover { background: var(--active); }
 }
 
+/* ---------- 手寫簽名板 ---------- */
+.pad-dialog {
+  width: min(760px, calc(100vw - 32px)); max-width: none; padding: 16px; border: 0; border-radius: 16px;
+  background: var(--panel); color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.35);
+}
+.pad-dialog::backdrop { background: rgba(10, 12, 16, .55); backdrop-filter: blur(3px); }
+.pad-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.pad-head h2 { margin: 0; font-size: 16px; }
+.pad-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 12px; }
+.pad-size { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.pad-size input { width: 120px; accent-color: var(--primary); }
+.pad-surface {
+  position: relative; height: min(46vh, 300px); border-radius: 12px; overflow: hidden;
+  background: #fbfaf7; border: 1px solid var(--border); touch-action: none;
+}
+.pad-surface.dark { background: #2a2d33; }
+.pad-surface canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+.pad-baseline {
+  position: absolute; left: 8%; right: 8%; bottom: 26%; border-bottom: 1.5px dashed rgba(0,0,0,.18); pointer-events: none;
+}
+.pad-surface.dark .pad-baseline { border-color: rgba(255,255,255,.25); }
+.pad-placeholder {
+  position: absolute; left: 0; right: 0; bottom: 30%; margin: 0; text-align: center; pointer-events: none;
+  color: rgba(0,0,0,.35); font-size: 14px;
+}
+.pad-surface.dark .pad-placeholder { color: rgba(255,255,255,.4); }
+.pad-actions { display: flex; gap: 8px; margin-top: 12px; }
+.pad-actions .btn-primary { margin-left: auto; }
+#sig-draw svg { flex: none; }
+@media (max-width: 720px) {
+  .pad-dialog[open] {
+    position: fixed; inset: auto 0 0 0; width: 100%; margin: 0; border-radius: 18px 18px 0 0;
+    padding: 14px 14px max(14px, env(safe-area-inset-bottom)); animation: sheet-up .22s ease;
+  }
+  .pad-surface { height: 42vh; }
+  .pad-size input { width: 90px; }
+}
+
 /* 預覽區的讀取提示 */
 .stage-busy {
   position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 5;

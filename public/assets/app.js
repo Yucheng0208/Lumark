@@ -1082,8 +1082,13 @@
 
   // 簽名圖片：PNG、JPG、WebP、SVG 都可以；選擇顏色時整張圖會改成該顏色（SVG 也能自由調色）
   let sigFile = null;
+  // 手寫簽名：筆跡存在這台裝置的瀏覽器中，下次開啟還在
+  let drawnSig = null;
+  try { drawnSig = JSON.parse(localStorage.getItem('lumark.drawnSig') || 'null'); } catch (e) { drawnSig = null; }
+  const hasDrawn = () => !!(drawnSig && drawnSig.strokes && drawnSig.strokes.length);
+
   async function loadSignatureImage() {
-    if (!sigFile) { signatureImage = null; renderPreview(); return; }
+    if (!sigFile) { signatureImage = hasDrawn() ? SignPad.render(drawnSig) : null; renderPreview(); return; }
     let src = sigFile;
     if (/svg/i.test(sigFile.type) || /\.svg$/i.test(sigFile.name)) {
       // SVG 先轉成高解析度點陣，避免放大後模糊
@@ -1106,6 +1111,22 @@
     loadSignatureImage();
   });
   $('sig-remove-white').addEventListener('change', loadSignatureImage);
+
+  $('sig-draw').addEventListener('click', async () => {
+    const res = await SignPad.open(drawnSig);
+    if (!res) return;
+    drawnSig = res.data;
+    sigFile = null;
+    try { localStorage.setItem('lumark.drawnSig', JSON.stringify(drawnSig)); } catch (e) { /* 空間不足或無痕模式 */ }
+    signatureImage = res.canvas;
+    $('sig-file').textContent = t('pad.label');
+    // 預設保留手寫的顏色；之後仍可在下方改色
+    changeSig('image', { on: true, color: 'original' });
+  });
+  if (hasDrawn()) {
+    signatureImage = SignPad.render(drawnSig);
+    $('sig-file').textContent = t('pad.label');
+  }
   ensureScriptFont().then(renderPreview);
 
   /* 在預覽上直接拖曳簽名到任何位置 */
@@ -1131,7 +1152,7 @@
     const hit = hitSignature(pt);
     if (!hit) return;
     e.preventDefault();
-    $('preview').setPointerCapture(e.pointerId);
+    try { $('preview').setPointerCapture(e.pointerId); } catch (err) { /* 部分裝置不支援 */ }
     sigDrag = { id: hit.id, dx: pt.x - (hit.box.x + hit.box.w / 2), dy: pt.y - (hit.box.y + hit.box.h / 2) };
     document.body.classList.add('dragging-sig');
   });

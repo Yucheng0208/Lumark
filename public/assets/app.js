@@ -17,6 +17,7 @@
     // 作者簽名：文字與圖片可以同時使用，位置可拖曳（custom 時 x、y 為整張圖的比例）
     sigText: { on: false, text: '', font: 'script', pos: 'photo-br', x: 0.85, y: 0.85, sizePct: 5, opacity: 0.9, color: 'auto', glass: false },
     sigImage: { on: false, pos: 'photo-bl', x: 0.15, y: 0.85, sizePct: 6, opacity: 0.9, color: 'auto', glass: false },
+    sigDraw: { on: false, pos: 'photo-tr', x: 0.85, y: 0.15, sizePct: 7, opacity: 0.95, color: 'original', glass: false },
     framePct: 10,
     style: 'bar',        // bar：只有底部資訊列；border：另外三邊也加框
     borderPct: 4,
@@ -29,7 +30,7 @@
     suffix: '_lumark',
     quality: 95,
     show: {
-      shot: true, model: true, lens: true, logo: true, date: true, time: true,
+      shot: true, brand: true, model: true, lens: true, logo: true, date: true, time: true,
       weather: true, temp: true, location: true, coords: false,
     },
   };
@@ -43,11 +44,24 @@
         video: { ...DEFAULTS.video, ...(s.video || {}) },
         sigText: { ...DEFAULTS.sigText, ...(s.sigText || {}) },
         sigImage: { ...DEFAULTS.sigImage, ...(s.sigImage || {}) },
+        sigDraw: { ...DEFAULTS.sigDraw, ...(s.sigDraw || {}) },
+        _hadSigDraw: !!s.sigDraw,
       };
     } catch (e) { return structuredClone(DEFAULTS); }
   }
 
   const settings = loadSettings();
+  // 舊版的手寫簽名放在「圖片簽名」裡；改為獨立的手寫簽名後，沿用原本的位置與開關
+  if (!settings._hadSigDraw) {
+    let hadDrawn = false;
+    try { hadDrawn = !!localStorage.getItem('lumark.drawnSig'); } catch (e) { /* ignore */ }
+    if (hadDrawn && settings.sigImage.on) {
+      const { on, pos, x, y, sizePct, opacity, color, glass } = settings.sigImage;
+      Object.assign(settings.sigDraw, { on, pos, x, y, sizePct, opacity, color, glass });
+      settings.sigImage.on = false;
+    }
+  }
+  delete settings._hadSigDraw;
   if (!Frame.parseColor(settings.frameColor)) settings.frameColor = '#ffffff';
   // 舊版預設為關閉；改為預設開啟後，對已存過設定的使用者套用一次
   if (!settings.autoGeoV2) { settings.autoGeo = true; settings.autoGeoV2 = true; }
@@ -132,7 +146,7 @@
     const custom = Object.keys(state.customLogos);
     sel.innerHTML = opt('auto', t('f.logo.auto')) + opt('none', t('f.logo.none'))
       + group('app', 'Lumark') + group('camera', t('f.logo.camera')) + group('phone', t('f.logo.phone'))
-      + group('media', t('f.logo.media')) + group('ai', t('f.logo.ai'))
+      + group('camapp', t('f.logo.camapp')) + group('media', t('f.logo.media')) + group('ai', t('f.logo.ai'))
       + (custom.length ? `<optgroup label="${escapeHtml(t('f.logo.customGroup'))}">${
         custom.map((k) => opt(k, t('f.logo.custom') + k.replace(/^custom:/, ''))).join('')}</optgroup>` : '');
     sel.value = settings.logo.startsWith('custom:') && !state.customLogos[settings.logo] ? 'auto' : settings.logo;
@@ -334,7 +348,7 @@
     const p = active();
     $('dropzone').hidden = !!p;
     $('stage').hidden = !p;
-    ['export-one', 'save-device', 'print-one', 'save-top'].forEach((id) => { $(id).disabled = !p; });
+    ['export-one', 'save-device', 'print-one', 'save-top', 'share-social'].forEach((id) => { $(id).disabled = !p; });
     $('export-all').disabled = state.photos.length < 2;
     resetSaveButton();
     renderList();
@@ -377,6 +391,7 @@
       el.value = v;
       el.disabled = !p;
     });
+    syncTimePicker();
     $('f-coords').value = p ? Geo.formatCoords(p.exif.lat, p.exif.lon) : '';
     $('f-coords').disabled = !p;
     $('f-weather').disabled = !p;
@@ -461,7 +476,7 @@
 
   function logoKeyFor(p) {
     if (!settings.show.logo || settings.layout === 'center') return 'none';
-    if (settings.logo === 'auto') return Frame.logoForMake(p.exif.make, p.exif.model) || p.sourceLogo || 'none';
+    if (settings.logo === 'auto') return Frame.logoForMake(p.exif.make, p.exif.model) || Frame.logoForSoftware(p.exif.software) || p.sourceLogo || 'none';
     return settings.logo;
   }
 
@@ -486,8 +501,21 @@
     return `${pm ? '下午' : '上午'} ${h12}:${mm}`;
   }
 
+  /* 置中版型的品牌名稱：EXIF 廠牌 → 相機 App（Dazz Cam）→ 手動選的 Logo 名稱 */
+  function brandFor(p) {
+    const b = Frame.brandName(p.exif.make);
+    if (b) return b;
+    if (Frame.logoForSoftware(p.exif.software) === 'Dazz') return 'Dazz Cam';
+    if (settings.logo !== 'auto' && settings.logo !== 'none' && !settings.logo.startsWith('custom:')) {
+      const info = Frame.LOGOS.find((l) => l.key === settings.logo);
+      if (info) return info.label;
+    }
+    return '';
+  }
+
   function linesFor(p) {
     return Frame.buildLines(p.exif, settings.show, {
+      brand: brandFor(p),
       date: formatDate,
       time: formatTime,
       weatherLabel: weatherText,
@@ -509,11 +537,13 @@
 
   /* 作者簽名：圖片存在記憶體（不寫入瀏覽器儲存空間） */
   let signatureImage = null;
+  let drawnImage = null; // 手寫簽名的圖片
   function signatureList() {
     const list = [];
-    const st = settings.sigText, si = settings.sigImage;
+    const st = settings.sigText, si = settings.sigImage, sd = settings.sigDraw;
     if (st.on && st.text.trim()) list.push({ ...st, id: 'text', kind: 'text', text: st.text.trim() });
     if (si.on && signatureImage) list.push({ ...si, id: 'image', kind: 'image', image: signatureImage });
+    if (sd.on && drawnImage) list.push({ ...sd, id: 'draw', kind: 'image', image: drawnImage });
     return list;
   }
 
@@ -718,7 +748,7 @@
 
   function resetSaveButton() {
     pendingShare = null;
-    $('save-device').textContent = t('btn.save');
+    $('save-device').querySelector('.tbtn-label').textContent = t('tb.save');
   }
 
   async function shareFile(file) {
@@ -730,7 +760,7 @@
       // 影片處理太久，瀏覽器不再視為使用者操作：請使用者再點一次
       if (e.name === 'NotAllowedError') {
         pendingShare = file;
-        $('save-device').textContent = t('btn.saveTap');
+        $('save-device').querySelector('.tbtn-label').textContent = t('tb.saveTap');
         setStatus(t('st.saveTap'));
         return;
       }
@@ -771,6 +801,71 @@
         download(file, file.name);
         setStatus(t('st.exported', { name: file.name }));
       }
+    } catch (e) { console.error(e); setStatus(cancelled ? t('st.cancelled') : t('st.exportFail')); }
+    finally { busy(false); }
+  }
+
+  /* ---------- 分享到社群 ----------
+     手機與支援的電腦瀏覽器：開啟系統分享選單（Instagram、Threads、Facebook、LINE、X…），檔案直接附上
+     不支援時：把圖片複製到剪貼簿，可直接貼到貼文；再不行就下載檔案 */
+  let pendingSocial = null;
+  function setShareLabel(key) { $('share-social').querySelector('span').textContent = t(key === 'btn.share' ? 'tb.share' : 'tb.shareTap'); }
+
+  async function toPngBlob(blob) {
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = await Frame.loadImage(url);
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext('2d').drawImage(img, 0, 0);
+      return await new Promise((res) => c.toBlob(res, 'image/png'));
+    } finally { URL.revokeObjectURL(url); }
+  }
+
+  async function deliverToSocial(file) {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: file.name });
+        setStatus(t('st.shared'));
+        return;
+      } catch (e) {
+        if (e.name === 'AbortError') { setStatus(''); return; }
+        // 影片處理太久，瀏覽器不再視為使用者操作：請使用者再點一次
+        if (e.name === 'NotAllowedError') {
+          pendingSocial = file;
+          setShareLabel('btn.shareTap');
+          setStatus(t('st.shareTap'));
+          return;
+        }
+        console.warn(e);
+      }
+    }
+    if (file.type.startsWith('image/') && navigator.clipboard && window.ClipboardItem) {
+      try {
+        const png = file.type === 'image/png' ? file : await toPngBlob(file);
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+        setStatus(t('st.copiedForSocial'));
+        return;
+      } catch (e) { console.warn('clipboard', e); }
+    }
+    download(file, file.name);
+    setStatus(t('st.shareFallback'));
+  }
+
+  async function shareSocial() {
+    const p = active();
+    if (!p) return;
+    if (pendingSocial) {
+      const file = pendingSocial;
+      pendingSocial = null;
+      setShareLabel('btn.share');
+      await deliverToSocial(file);
+      return;
+    }
+    busy(true, t('st.exporting'));
+    try {
+      const blob = await renderFull(p, progressHandler(''));
+      await deliverToSocial(new File([blob], outName(p), { type: blob.type }));
     } catch (e) { console.error(e); setStatus(cancelled ? t('st.cancelled') : t('st.exportFail')); }
     finally { busy(false); }
   }
@@ -845,7 +940,7 @@
   let cancelled = false;
   function busy(on, msg) {
     if (on) cancelled = false;
-    ['export-one', 'save-device', 'print-one', 'save-top'].forEach((id) => { $(id).disabled = on || !active(); });
+    ['export-one', 'save-device', 'print-one', 'save-top', 'share-social'].forEach((id) => { $(id).disabled = on || !active(); });
     $('export-all').disabled = on || state.photos.length < 2;
     $('cancel-export').hidden = !on;
     if (!on) $('progress').hidden = true;
@@ -944,6 +1039,62 @@
   bindSeg('data-date-format', 'dateFormat');
   bindSeg('data-time-format', 'timeFormat');
 
+  /* ---------- 時間選擇器：依「時間格式」顯示 24 小時制，或 12 小時制加上午／下午 ---------- */
+
+  const pad2 = (n) => String(n).padStart(2, '0');
+  function buildTimePicker() {
+    const is12 = settings.timeFormat === '12';
+    const cur = $('tp-hour').value, curM = $('tp-min').value;
+    const empty = '<option value="">--</option>';
+    $('tp-hour').innerHTML = empty + (is12
+      ? Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')
+      : Array.from({ length: 24 }, (_, i) => `<option value="${i}">${pad2(i)}</option>`).join(''));
+    $('tp-min').innerHTML = empty + Array.from({ length: 60 }, (_, i) => `<option value="${i}">${pad2(i)}</option>`).join('');
+    $('tp-ampm').innerHTML = `<option value="am">${escapeHtml(t('f.am'))}</option><option value="pm">${escapeHtml(t('f.pm'))}</option>`;
+    $('tp-ampm').hidden = !is12;
+    // 12 小時制有三個選單，整行顯示才不會被截斷
+    $('time-picker').closest('.field').classList.toggle('full', is12);
+    // 英文是 1:32 PM（上午下午放後面），中文、日文是 下午 1:32（放前面）
+    $('time-picker').classList.toggle('ampm-after', I18n.lang === 'en');
+    $('tp-hour').setAttribute('aria-label', t('f.hour'));
+    if (cur !== undefined) { $('tp-hour').value = cur; $('tp-min').value = curM; }
+    syncTimePicker();
+  }
+
+  function syncTimePicker() {
+    const m = String($('f-time').value || '').match(/^(\d{1,2}):(\d{2})/);
+    const disabled = !active();
+    ['tp-hour', 'tp-min', 'tp-ampm'].forEach((id) => { $(id).disabled = disabled; });
+    if (!m) { $('tp-hour').value = ''; $('tp-min').value = ''; return; }
+    const h = +m[1], mi = +m[2];
+    if (settings.timeFormat === '12') {
+      $('tp-hour').value = String(h % 12 || 12);
+      $('tp-ampm').value = h >= 12 ? 'pm' : 'am';
+    } else {
+      $('tp-hour').value = String(h);
+    }
+    $('tp-min').value = String(mi);
+  }
+
+  function onTimePicked() {
+    const hv = $('tp-hour').value, mv = $('tp-min').value;
+    if (hv === '' && mv === '') { $('f-time').value = ''; }
+    else {
+      let h = Number(hv || 0);
+      if (settings.timeFormat === '12') {
+        h = h % 12;
+        if ($('tp-ampm').value === 'pm') h += 12;
+      }
+      $('f-time').value = `${pad2(h)}:${pad2(Number(mv || 0))}`;
+    }
+    $('f-time').dispatchEvent(new Event('input'));
+    $('f-time').dispatchEvent(new Event('change'));
+  }
+  ['tp-hour', 'tp-min', 'tp-ampm'].forEach((id) => $(id).addEventListener('change', onTimePicked));
+  document.querySelectorAll('[data-time-format]').forEach((b) => b.addEventListener('click', buildTimePicker));
+  window.addEventListener('langchange', buildTimePicker);
+  buildTimePicker();
+
   /* ---------- 版型、邊框顏色、Logo 顏色 ---------- */
 
   bindSeg('data-layout', 'layout');
@@ -1009,7 +1160,7 @@
 
   /* ---------- 作者簽名（文字、圖片兩張卡片） ---------- */
 
-  const SIG = { text: settings.sigText, image: settings.sigImage };
+  const SIG = { text: settings.sigText, image: settings.sigImage, draw: settings.sigDraw };
 
   function syncSigCard(k) {
     const sg = SIG[k];
@@ -1056,7 +1207,7 @@
     return loadWebFont(SIG.text.font);
   }
 
-  ['text', 'image'].forEach((k) => {
+  ['text', 'image', 'draw'].forEach((k) => {
     $(`sig-${k}-on`).addEventListener('change', (e) => { changeSig(k, { on: e.target.checked }); ensureScriptFont().then(renderPreview); });
     $(`sig-${k}-pos`).addEventListener('change', (e) => changeSig(k, { pos: e.target.value }));
     $(`sig-${k}-size`).addEventListener('input', (e) => changeSig(k, { sizePct: Number(e.target.value) }));
@@ -1088,7 +1239,7 @@
   const hasDrawn = () => !!(drawnSig && drawnSig.strokes && drawnSig.strokes.length);
 
   async function loadSignatureImage() {
-    if (!sigFile) { signatureImage = hasDrawn() ? SignPad.render(drawnSig) : null; renderPreview(); return; }
+    if (!sigFile) { signatureImage = null; renderPreview(); return; }
     let src = sigFile;
     if (/svg/i.test(sigFile.type) || /\.svg$/i.test(sigFile.name)) {
       // SVG 先轉成高解析度點陣，避免放大後模糊
@@ -1112,21 +1263,25 @@
   });
   $('sig-remove-white').addEventListener('change', loadSignatureImage);
 
+  /* 手寫簽名（獨立的第三種簽名）：在簽名板上簽，之後可重新編輯 */
+  function syncDrawStatus() {
+    $('sig-draw-label').textContent = t(hasDrawn() ? 'pad.edit' : 'pad.open');
+    $('sig-draw-status').textContent = hasDrawn() ? t('pad.saved') : '';
+  }
   $('sig-draw').addEventListener('click', async () => {
     const res = await SignPad.open(drawnSig);
     if (!res) return;
     drawnSig = res.data;
-    sigFile = null;
     try { localStorage.setItem('lumark.drawnSig', JSON.stringify(drawnSig)); } catch (e) { /* 空間不足或無痕模式 */ }
-    signatureImage = res.canvas;
-    $('sig-file').textContent = t('pad.label');
-    // 預設保留手寫的顏色；之後仍可在下方改色
-    changeSig('image', { on: true, color: 'original' });
+    drawnImage = res.canvas;
+    syncDrawStatus();
+    changeSig('draw', { on: true });
   });
-  if (hasDrawn()) {
-    signatureImage = SignPad.render(drawnSig);
-    $('sig-file').textContent = t('pad.label');
-  }
+  // 打開手寫簽名卡片但還沒簽過時，直接開啟簽名板
+  $('sig-draw-on').addEventListener('change', (e) => { if (e.target.checked && !hasDrawn()) $('sig-draw').click(); });
+  if (hasDrawn()) drawnImage = SignPad.render(drawnSig);
+  syncDrawStatus();
+  window.addEventListener('langchange', syncDrawStatus);
   ensureScriptFont().then(renderPreview);
 
   /* 在預覽上直接拖曳簽名到任何位置 */
@@ -1140,7 +1295,7 @@
   }
   function hitSignature(pt) {
     const boxes = (pt && pt.L.sigBoxes) || {};
-    for (const id of ['text', 'image']) {
+    for (const id of ['draw', 'image', 'text']) {
       const b = boxes[id];
       if (b && pt.x >= b.x && pt.x <= b.x + b.w && pt.y >= b.y && pt.y <= b.y + b.h) return { id, box: b };
     }
@@ -1323,6 +1478,7 @@
 
   $('export-one').addEventListener('click', exportOne);
   $('save-device').addEventListener('click', saveToDevice);
+  $('share-social').addEventListener('click', shareSocial);
   $('print-one').addEventListener('click', printCurrent);
   $('export-all').addEventListener('click', exportAll);
 

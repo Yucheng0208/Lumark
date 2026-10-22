@@ -37,6 +37,7 @@
     { key: 'LG', file: 'LG.svg', label: 'LG', group: 'phone' },
     { key: 'HTC', file: 'HTC.svg', label: 'HTC', group: 'phone' },
     { key: 'Sharp', file: 'Sharp.svg', label: 'Sharp', group: 'phone' },
+    { key: 'Dazz', file: 'Dazz.png', darkFile: 'Dazz_dark.png', label: 'Dazz Cam', group: 'camapp' },
     { key: 'YouTube', file: 'YouTube.svg', label: 'YouTube', group: 'media' },
     { key: 'YouTubeMusic', file: 'YouTubeMusic.svg', label: 'YouTube Music', group: 'media' },
     { key: 'Spotify', file: 'Spotify.svg', label: 'Spotify', group: 'media' },
@@ -123,6 +124,34 @@
   function logoForHost(host) {
     const hit = HOST_TO_LOGO.find(([re]) => re.test(host || ''));
     return hit ? hit[1] : null;
+  }
+
+  // 相機 App 會寫在 EXIF 的 Software 欄位
+  function logoForSoftware(sw) {
+    if (/dazz/i.test(sw || '')) return 'Dazz';
+    return null;
+  }
+
+  /** 把 EXIF 的廠牌整理成好看的品牌名稱（NIKON CORPORATION → NIKON） */
+  const BRAND_NAMES = [
+    [/^nikon/i, 'NIKON'], [/^canon/i, 'Canon'], [/^fuji/i, 'FUJIFILM'], [/^sony/i, 'SONY'],
+    [/^ricoh/i, 'RICOH'], [/^pentax/i, 'PENTAX'], [/^olympus/i, 'OLYMPUS'], [/^om digital/i, 'OM SYSTEM'],
+    [/^panasonic/i, 'Panasonic'], [/^leica/i, 'Leica'], [/^hasselblad/i, 'HASSELBLAD'], [/^sigma/i, 'SIGMA'],
+    [/^dji/i, 'DJI'], [/^gopro/i, 'GoPro'], [/^insta360|^arashi/i, 'Insta360'], [/^kodak/i, 'Kodak'],
+    [/^apple/i, 'Apple'], [/^samsung/i, 'Samsung'], [/^google/i, 'Google'], [/^huawei/i, 'HUAWEI'],
+    [/^xiaomi/i, 'Xiaomi'], [/^vivo/i, 'vivo'], [/^oppo/i, 'OPPO'], [/^oneplus/i, 'OnePlus'], [/^asus/i, 'ASUS'],
+    [/^honor/i, 'HONOR'], [/^motorola/i, 'Motorola'], [/^nothing/i, 'Nothing'], [/^microsoft/i, 'Microsoft'],
+  ];
+  function brandName(make) {
+    const m = String(make || '').trim();
+    if (!m) return '';
+    const hit = BRAND_NAMES.find(([re]) => re.test(m));
+    if (hit) return hit[1];
+    // 去掉結尾的公司型態字樣（Co., Ltd.／Corporation／Inc.／GmbH…）
+    let out = m;
+    const SUFFIX = /[\s,]*(co\.?,?\s*ltd\.?|ltd\.?|limited|corporation|corp\.?|inc\.?|gmbh|ag|s\.?a\.?|imaging|company|camera)$/i;
+    for (let i = 0; i < 4 && SUFFIX.test(out); i++) out = out.replace(SUFFIX, '');
+    return out.replace(/[,.\s]+$/, '').trim() || m;
   }
 
   function logoForMake(make, model) {
@@ -232,6 +261,7 @@
       date: when ? `${when.y}/${pad2(when.mo)}/${pad2(when.d)}` : '',
       time: when && when.h != null ? `${pad2(when.h)}:${pad2(when.mi)}` : '',
       lat, lon, dateFromFile,
+      software: String(raw.Software || '').trim(),
       location: '',
       weather: '',
       temp: '',
@@ -283,7 +313,12 @@
 
     // 置中版型：機身／鏡頭＋拍攝參數／其他資訊，各一行
     const center = [];
-    if (show.model && ex.model) center.push({ text: ex.model, bold: true });
+    const brand = show.brand && fmt.brand ? fmt.brand : '';
+    if (brand) center.push({ text: brand, bold: true, spaced: true });
+    let model = ex.model || '';
+    // 型號開頭已經有品牌名稱時拿掉，避免重複（Canon EOS R5 → EOS R5）
+    if (brand && model.toLowerCase().startsWith(brand.toLowerCase() + ' ')) model = model.slice(brand.length).trim();
+    if (show.model && model) center.push({ text: model, bold: true });
     const mid = [show.lens && ex.lens, show.shot && shot].filter(Boolean).join(SEP);
     if (mid) center.push({ text: mid, bold: center.length === 0 });
     if (extra) center.push({ text: extra, bold: false });
@@ -577,8 +612,12 @@
       ctx.textAlign = align || 'left';
       arr.forEach((l, i) => {
         ctx.font = font(l.bold, fontSize);
-        ctx.fillStyle = l.bold ? theme.text : theme.sub;
-        ctx.fillText(l.text, x, top + i * lineGap);
+        ctx.fillStyle = l.bold || l.spaced ? theme.text : theme.sub;
+        // 品牌名稱字距加寬
+        const spacing = l.spaced && 'letterSpacing' in ctx;
+        if (spacing) ctx.letterSpacing = `${Math.round(fontSize * 0.22)}px`;
+        ctx.fillText(l.text, x + (spacing && align === 'center' ? Math.round(fontSize * 0.11) : 0), top + i * lineGap);
+        if (spacing) ctx.letterSpacing = '0px';
       });
       ctx.textAlign = 'left';
       return top;
@@ -790,5 +829,5 @@
     }
   }
 
-  window.Frame = { WEB_FONTS, parseColor, colorsFor, isDark, removeWhite, trimTransparent, logoForHost, formatExposure, LOGOS, logoForMake, readExif, buildLines, getLogo, frameLayout, drawFrame, loadImage, logoCache };
+  window.Frame = { brandName, logoForSoftware, WEB_FONTS, parseColor, colorsFor, isDark, removeWhite, trimTransparent, logoForHost, formatExposure, LOGOS, logoForMake, readExif, buildLines, getLogo, frameLayout, drawFrame, loadImage, logoCache };
 })();

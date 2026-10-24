@@ -23,7 +23,7 @@
     borderPct: 4,
     video: { format: 'mp4', mute: false, loops: 1, boomerang: false, gifInfinite: true, fps: 15, maxWidth: 0 },
     tempUnit: 'C',
-    dateFormat: 'slash', // slash：YYYY/MM/DD；dash：YYYY-MM-DD
+    dateFormat: 'slash', // slash：2026/10/24；dash：2026-10-24；dot：2026.10.24；short：2026年10月24日／Oct 24, 2026
     timeFormat: '24',    // 24 或 12 小時制
     locFormat: 'country-city',
     autoGeo: true, // 相片沒有 GPS 時，用手機／電腦目前位置取得地點、天氣與溫度
@@ -480,12 +480,21 @@
     return settings.logo;
   }
 
-  /* 日期：YYYY/MM/DD 或 YYYY-MM-DD（輸入欄位兩種寫法都接受） */
-  function formatDate(d) {
+  /* 日期：2026/10/24、2026-10-24、2026.10.24，或依語言顯示 2026年10月24日／Oct 24, 2026（輸入欄位各種分隔符號都接受） */
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function formatDate(d, format = settings.dateFormat) {
     const m = String(d).match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})$/);
     if (!m) return d;
-    const sep = settings.dateFormat === 'dash' ? '-' : '/';
-    return [m[1], m[2].padStart(2, '0'), m[3].padStart(2, '0')].join(sep);
+    const [y, mo, day] = [m[1], +m[2], +m[3]];
+    if (format === 'short') return I18n.lang === 'en' ? `${MONTHS[mo - 1]} ${day}, ${y}` : `${y}年${mo}月${day}日`; // 中文、日文相同
+    const sep = { dash: '-', dot: '.' }[format] || '/';
+    return [y, String(mo).padStart(2, '0'), String(day).padStart(2, '0')].join(sep);
+  }
+  /* 日期格式按鈕上的範例用今天的日期 */
+  function syncDateFormatExamples() {
+    const now = new Date();
+    const today = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()}`;
+    document.querySelectorAll('[data-date-format]').forEach((b) => { b.textContent = formatDate(today, b.dataset.dateFormat); });
   }
 
   /* 時間：24 小時制，或依語言顯示 12 小時制（下午 1:32／1:32 PM／午後1:32） */
@@ -1037,6 +1046,8 @@
   }
   bindSeg('data-unit', 'tempUnit');
   bindSeg('data-date-format', 'dateFormat');
+  syncDateFormatExamples();
+  window.addEventListener('langchange', syncDateFormatExamples);
   bindSeg('data-time-format', 'timeFormat');
 
   /* ---------- 時間選擇器：依「時間格式」顯示 24 小時制，或 12 小時制加上午／下午 ---------- */

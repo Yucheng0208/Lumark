@@ -229,7 +229,6 @@ h2 { font-size: 13px; margin: 0 0 10px; font-weight: 650; }
 .color-text.invalid { border-color: #e5484d; }
 .icon-btn { width: 36px; padding: 0; }
 .icon-btn.active { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
-.picking #preview { cursor: crosshair; }
 [data-layout-mode="center"] .logo-field { opacity: .45; }
 
 .canvas-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 8px 16px 16px; }

@@ -1122,40 +1122,6 @@
   });
   $('frame-color-text').addEventListener('change', (e) => { if (setFrameColor(e.target.value)) e.target.blur(); });
 
-  // 吸取顏色：Chrome／Edge 可從螢幕任何地方吸色；其他瀏覽器改成點一下預覽上的位置
-  let picking = false;
-  function stopPicking() {
-    picking = false;
-    document.body.classList.remove('picking');
-    $('eyedropper').classList.remove('active');
-    $('eyedropper-hint').hidden = true;
-  }
-  $('eyedropper').addEventListener('click', async () => {
-    if (picking) { stopPicking(); return; }
-    if (window.EyeDropper) {
-      try { const r = await new window.EyeDropper().open(); setFrameColor(r.sRGBHex); return; }
-      catch (e) { if (e && e.name === 'AbortError') return; }
-    }
-    if (!active()) return;
-    picking = true;
-    document.body.classList.add('picking');
-    $('eyedropper').classList.add('active');
-    $('eyedropper-hint').hidden = false;
-    if (state.mode !== 'preview') setMode('preview');
-  });
-  $('preview').addEventListener('click', (e) => {
-    if (!picking) return;
-    const cv = $('preview');
-    const r = cv.getBoundingClientRect();
-    const x = Math.floor((e.clientX - r.left) / r.width * cv.width);
-    const y = Math.floor((e.clientY - r.top) / r.height * cv.height);
-    try {
-      const px = cv.getContext('2d').getImageData(x, y, 1, 1).data;
-      setFrameColor(`rgb(${px[0]},${px[1]},${px[2]})`);
-    } catch (err) { console.warn(err); }
-    stopPicking();
-  });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && picking) stopPicking(); });
   setFrameColor(settings.frameColor);
 
   /* ---------- 作者簽名（文字、圖片兩張卡片） ---------- */
@@ -1302,7 +1268,6 @@
     return null;
   }
   $('preview').addEventListener('pointerdown', (e) => {
-    if (picking) return;
     const pt = previewPoint(e);
     const hit = hitSignature(pt);
     if (!hit) return;
@@ -1314,7 +1279,7 @@
   $('preview').addEventListener('pointermove', (e) => {
     const pt = previewPoint(e);
     if (!pt) return;
-    if (!sigDrag) { document.body.classList.toggle('over-sig', !picking && !!hitSignature(pt)); return; }
+    if (!sigDrag) { document.body.classList.toggle('over-sig', !!hitSignature(pt)); return; }
     const sg = SIG[sigDrag.id];
     sg.pos = 'custom';
     sg.x = Math.max(0, Math.min(1, (pt.x - sigDrag.dx) / pt.L.width));

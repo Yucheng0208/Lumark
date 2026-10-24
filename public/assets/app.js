@@ -12,12 +12,13 @@
   const DEFAULTS = {
     logo: 'auto',
     frameColor: '#ffffff', // 邊框顏色（預設白色，可選黑色或任意顏色）
+    frameGradient: { on: false, stops: ['#fde2c4', '#f9c6d3', '#d4d3f7'], dir: 'h' }, // 漸層邊框：dir 為 h 橫向、v 直向、d 斜向
     layout: 'classic',     // classic：左資訊＋右 Logo；center：資訊置中、不放 Logo
     logoColor: 'mono',     // mono：依邊框自動黑／白；original：品牌原色
     // 作者簽名：文字與圖片可以同時使用，位置可拖曳（custom 時 x、y 為整張圖的比例）
     sigText: { on: false, text: '', font: 'script', pos: 'photo-br', x: 0.85, y: 0.85, sizePct: 5, opacity: 0.9, color: 'auto', glass: false },
     sigImage: { on: false, pos: 'photo-bl', x: 0.15, y: 0.85, sizePct: 6, opacity: 0.9, color: 'auto', glass: false },
-    sigDraw: { on: false, pos: 'photo-tr', x: 0.85, y: 0.15, sizePct: 7, opacity: 0.95, color: 'original', glass: false },
+    sigDraw: { on: false, pos: 'photo-tr', x: 0.85, y: 0.15, sizePct: 7, opacity: 0.95, color: 'original', glass: false, gradient: ['#f7b22c', '#f47b62', '#b066d0', '#4a7ff0'] },
     framePct: 10,
     style: 'bar',        // bar：只有底部資訊列；border：另外三邊也加框
     borderPct: 4,
@@ -45,6 +46,7 @@
         sigText: { ...DEFAULTS.sigText, ...(s.sigText || {}) },
         sigImage: { ...DEFAULTS.sigImage, ...(s.sigImage || {}) },
         sigDraw: { ...DEFAULTS.sigDraw, ...(s.sigDraw || {}) },
+        frameGradient: { ...DEFAULTS.frameGradient, ...(s.frameGradient || {}) },
         _hadSigDraw: !!s.sigDraw,
       };
     } catch (e) { return structuredClone(DEFAULTS); }
@@ -391,7 +393,6 @@
       el.value = v;
       el.disabled = !p;
     });
-    syncTimePicker();
     $('f-coords').value = p ? Geo.formatCoords(p.exif.lat, p.exif.lon) : '';
     $('f-coords').disabled = !p;
     $('f-weather').disabled = !p;
@@ -533,15 +534,18 @@
     });
   }
 
+  // 漸層邊框用各段顏色的平均來決定文字、Logo 的深淺
+  const frameTone = () => (settings.frameGradient.on ? Frame.averageColor(settings.frameGradient.stops) : settings.frameColor);
+
   function frameOpts(extra) {
     return {
-      frameColor: settings.frameColor, layout: settings.layout, framePct: settings.framePct,
+      frameColor: frameTone(), frameGradient: settings.frameGradient.on ? settings.frameGradient : null, layout: settings.layout, framePct: settings.framePct,
       style: settings.style, borderPct: settings.borderPct, signatures: signatureList(), ...extra,
     };
   }
 
   function logoOpts() {
-    return { dark: Frame.isDark(settings.frameColor), mono: settings.logoColor === 'mono' };
+    return { dark: Frame.isDark(frameTone()), mono: settings.logoColor === 'mono' };
   }
 
   /* 作者簽名：圖片存在記憶體（不寫入瀏覽器儲存空間） */
@@ -693,7 +697,7 @@
     const v = settings.video;
     return Media.exportVideo({
       file: p.file, crop, layout, overlay,
-      bg: settings.frameColor,
+      bg: frameTone(),
       format: v.format, mute: v.mute, loops: v.loops, boomerang: v.boomerang,
       gifInfinite: v.gifInfinite, fps: v.fps, maxWidth: Number(v.maxWidth) || 0,
     }, onProgress || (() => {}));
@@ -1050,62 +1054,6 @@
   window.addEventListener('langchange', syncDateFormatExamples);
   bindSeg('data-time-format', 'timeFormat');
 
-  /* ---------- 時間選擇器：依「時間格式」顯示 24 小時制，或 12 小時制加上午／下午 ---------- */
-
-  const pad2 = (n) => String(n).padStart(2, '0');
-  function buildTimePicker() {
-    const is12 = settings.timeFormat === '12';
-    const cur = $('tp-hour').value, curM = $('tp-min').value;
-    const empty = '<option value="">--</option>';
-    $('tp-hour').innerHTML = empty + (is12
-      ? Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')
-      : Array.from({ length: 24 }, (_, i) => `<option value="${i}">${pad2(i)}</option>`).join(''));
-    $('tp-min').innerHTML = empty + Array.from({ length: 60 }, (_, i) => `<option value="${i}">${pad2(i)}</option>`).join('');
-    $('tp-ampm').innerHTML = `<option value="am">${escapeHtml(t('f.am'))}</option><option value="pm">${escapeHtml(t('f.pm'))}</option>`;
-    $('tp-ampm').hidden = !is12;
-    // 12 小時制有三個選單，整行顯示才不會被截斷
-    $('time-picker').closest('.field').classList.toggle('full', is12);
-    // 英文是 1:32 PM（上午下午放後面），中文、日文是 下午 1:32（放前面）
-    $('time-picker').classList.toggle('ampm-after', I18n.lang === 'en');
-    $('tp-hour').setAttribute('aria-label', t('f.hour'));
-    if (cur !== undefined) { $('tp-hour').value = cur; $('tp-min').value = curM; }
-    syncTimePicker();
-  }
-
-  function syncTimePicker() {
-    const m = String($('f-time').value || '').match(/^(\d{1,2}):(\d{2})/);
-    const disabled = !active();
-    ['tp-hour', 'tp-min', 'tp-ampm'].forEach((id) => { $(id).disabled = disabled; });
-    if (!m) { $('tp-hour').value = ''; $('tp-min').value = ''; return; }
-    const h = +m[1], mi = +m[2];
-    if (settings.timeFormat === '12') {
-      $('tp-hour').value = String(h % 12 || 12);
-      $('tp-ampm').value = h >= 12 ? 'pm' : 'am';
-    } else {
-      $('tp-hour').value = String(h);
-    }
-    $('tp-min').value = String(mi);
-  }
-
-  function onTimePicked() {
-    const hv = $('tp-hour').value, mv = $('tp-min').value;
-    if (hv === '' && mv === '') { $('f-time').value = ''; }
-    else {
-      let h = Number(hv || 0);
-      if (settings.timeFormat === '12') {
-        h = h % 12;
-        if ($('tp-ampm').value === 'pm') h += 12;
-      }
-      $('f-time').value = `${pad2(h)}:${pad2(Number(mv || 0))}`;
-    }
-    $('f-time').dispatchEvent(new Event('input'));
-    $('f-time').dispatchEvent(new Event('change'));
-  }
-  ['tp-hour', 'tp-min', 'tp-ampm'].forEach((id) => $(id).addEventListener('change', onTimePicked));
-  document.querySelectorAll('[data-time-format]').forEach((b) => b.addEventListener('click', buildTimePicker));
-  window.addEventListener('langchange', buildTimePicker);
-  buildTimePicker();
-
   /* ---------- 版型、邊框顏色、Logo 顏色 ---------- */
 
   bindSeg('data-layout', 'layout');
@@ -1118,8 +1066,9 @@
     const c = Frame.parseColor(hex);
     if (!c) return false;
     settings.frameColor = c;
+    if (from !== 'init') settings.frameGradient.on = false;
     saveSettings();
-    document.querySelectorAll('[data-frame-color]').forEach((b) => b.classList.toggle('active', b.dataset.frameColor === c));
+    syncFrameGradient();
     if (from !== 'picker') $('frame-color-picker').value = c;
     if (from !== 'text') { $('frame-color-text').value = c.toUpperCase(); $('frame-color-text').classList.remove('invalid'); }
     renderPreview();
@@ -1133,11 +1082,92 @@
   });
   $('frame-color-text').addEventListener('change', (e) => { if (setFrameColor(e.target.value)) e.target.blur(); });
 
-  setFrameColor(settings.frameColor);
+
+  /* ---------- 漸層編輯器：邊框與手寫簽名共用。每一段顏色可自選，中間自動過渡 ---------- */
+
+  const MAX_STOPS = 6;
+  const cssGradient = (stops, deg = 90) => `linear-gradient(${deg}deg, ${stops.join(', ')})`;
+  function gradEditor(root, { presets, get, set }) {
+    const bar = root.querySelector('.grad-bar');
+    const box = root.querySelector('.grad-stops');
+    root.querySelector('.grad-presets').innerHTML = presets.map((ps, i) =>
+      `<button class="grad-preset" type="button" data-preset="${i}" style="--sw:${cssGradient(ps)}"></button>`).join('');
+    const update = (stops) => set(stops.slice());
+    function render() {
+      const stops = get();
+      bar.style.background = cssGradient(stops);
+      if (box.querySelectorAll('input').length !== stops.length) {
+        box.innerHTML = stops.map((c, i) => (i ? '<span class="grad-arrow" aria-hidden="true">›</span>' : '') +
+          `<label class="swatch grad-stop"><input type="color" data-i="${i}"></label>`).join('');
+      }
+      box.querySelectorAll('input').forEach((inp, i) => {
+        inp.parentElement.style.setProperty('--sw', stops[i]);
+        inp.setAttribute('aria-label', `${t('grad.stop')} ${i + 1}`);
+        if (document.activeElement !== inp) inp.value = stops[i];
+      });
+      root.querySelector('[data-grad-act="add"]').disabled = stops.length >= MAX_STOPS;
+      root.querySelector('[data-grad-act="remove"]').disabled = stops.length <= 2;
+      root.querySelectorAll('.grad-preset').forEach((b, i) => b.classList.toggle('active', presets[i].join() === stops.join()));
+    }
+    box.addEventListener('input', (e) => {
+      const stops = get().slice();
+      stops[+e.target.dataset.i] = e.target.value;
+      update(stops);
+    });
+    root.querySelector('.grad-actions').addEventListener('click', (e) => {
+      const act = e.target.closest('[data-grad-act]');
+      if (!act) return;
+      const stops = get().slice();
+      // 新的一段放在最後兩段中間，顏色取兩者的平均，過渡才自然
+      if (act.dataset.gradAct === 'add' && stops.length < MAX_STOPS) stops.splice(stops.length - 1, 0, Frame.averageColor(stops.slice(-2)));
+      if (act.dataset.gradAct === 'remove' && stops.length > 2) stops.splice(stops.length - 2, 1);
+      if (act.dataset.gradAct === 'reverse') stops.reverse();
+      update(stops);
+    });
+    root.querySelector('.grad-presets').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-preset]');
+      if (b) update(presets[+b.dataset.preset]);
+    });
+    window.addEventListener('langchange', render);
+    return { render };
+  }
+
+  const frameGrad = gradEditor($('frame-grad'), {
+    presets: [
+      ['#fde2c4', '#f9c6d3', '#d4d3f7'], ['#d8f5ea', '#d3e8fb'], ['#ffe9d6', '#ffd1dc'],
+      ['#ffcf9f', '#ff9aa2', '#b5a7f0'], ['#1b2440', '#3a2d5c', '#141826'],
+    ],
+    get: () => settings.frameGradient.stops,
+    set: (stops) => { Object.assign(settings.frameGradient, { stops, on: true }); saveSettings(); syncFrameGradient(); renderPreview(); },
+  });
+  function syncFrameGradient() {
+    const g = settings.frameGradient;
+    document.querySelectorAll('[data-frame-color]').forEach((b) => b.classList.toggle('active', !g.on && b.dataset.frameColor === settings.frameColor));
+    $('frame-grad-btn').classList.toggle('active', g.on);
+    $('frame-grad-btn').style.setProperty('--sw', cssGradient(g.stops, 135));
+    $('frame-grad').hidden = !g.on;
+    document.querySelectorAll('[data-grad-dir]').forEach((b) => b.classList.toggle('active', b.dataset.gradDir === g.dir));
+    frameGrad.render();
+  }
+  $('frame-grad-btn').addEventListener('click', () => {
+    settings.frameGradient.on = true;
+    saveSettings(); syncFrameGradient(); renderPreview();
+  });
+  document.querySelectorAll('[data-grad-dir]').forEach((b) => b.addEventListener('click', () => {
+    settings.frameGradient.dir = b.dataset.gradDir;
+    saveSettings(); syncFrameGradient(); renderPreview();
+  }));
+  setFrameColor(settings.frameColor, 'init');
 
   /* ---------- 作者簽名（文字、圖片兩張卡片） ---------- */
 
   const SIG = { text: settings.sigText, image: settings.sigImage, draw: settings.sigDraw };
+
+  // 箭頭只負責展開／收合設定；開關決定簽名要不要出現在相片上
+  function setSigOpen(k, open) {
+    $(`sig-card-${k}`).classList.toggle('open', open);
+    $(`sig-card-${k}`).querySelector('.sig-toggle').setAttribute('aria-expanded', String(open));
+  }
 
   function syncSigCard(k) {
     const sg = SIG[k];
@@ -1155,7 +1185,17 @@
     const text = document.querySelector(`.sig-color-text[data-sig="${k}"]`);
     if (hex) picker.value = hex;
     if (document.activeElement !== text) { text.value = hex.toUpperCase(); text.classList.remove('invalid'); }
+    if (k === 'draw') { $('sig-draw-grad').hidden = sg.color !== 'gradient'; sigGrad.render(); }
   }
+  const sigGrad = gradEditor($('sig-draw-grad'), {
+    presets: [
+      ['#f7b22c', '#f47b62', '#b066d0', '#4a7ff0'], ['#ffb347', '#ff5e62', '#c13584'], ['#00c6ff', '#0072ff', '#6a3df0'],
+      ['#43e97b', '#38f9d7', '#7f7fd5'], ['#fff1b8', '#f5b916', '#b8860b'],
+    ],
+    get: () => SIG.draw.gradient,
+    set: (stops) => changeSig('draw', { gradient: stops, color: 'gradient' }),
+  });
+
   function changeSig(k, patch) {
     Object.assign(SIG[k], patch);
     saveSettings(); syncSigCard(k); renderPreview();
@@ -1185,7 +1225,12 @@
   }
 
   ['text', 'image', 'draw'].forEach((k) => {
-    $(`sig-${k}-on`).addEventListener('change', (e) => { changeSig(k, { on: e.target.checked }); ensureScriptFont().then(renderPreview); });
+    $(`sig-${k}-on`).addEventListener('change', (e) => {
+      changeSig(k, { on: e.target.checked });
+      if (e.target.checked) setSigOpen(k, true);
+      ensureScriptFont().then(renderPreview);
+    });
+    $(`sig-card-${k}`).querySelector('.sig-toggle').addEventListener('click', () => setSigOpen(k, !$(`sig-card-${k}`).classList.contains('open')));
     $(`sig-${k}-pos`).addEventListener('change', (e) => changeSig(k, { pos: e.target.value }));
     $(`sig-${k}-size`).addEventListener('input', (e) => changeSig(k, { sizePct: Number(e.target.value) }));
     $(`sig-${k}-opacity`).addEventListener('input', (e) => changeSig(k, { opacity: Number(e.target.value) / 100 }));

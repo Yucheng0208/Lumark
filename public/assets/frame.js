@@ -398,13 +398,37 @@
     return c;
   }
 
-  function tint(src, color) {
+  /**
+   * 漸層：stops 為 2 個以上的 HEX 顏色，平均分布、自動過渡
+   * dir：h 由左到右、v 由上到下、d 由左上到右下
+   */
+  function linearGradient(ctx, x, y, w, h, stops, dir = 'h') {
+    const g = dir === 'v' ? ctx.createLinearGradient(x, y, x, y + h)
+      : dir === 'd' ? ctx.createLinearGradient(x, y, x + w, y + h)
+      : ctx.createLinearGradient(x, y, x + w, y);
+    stops.forEach((c, i) => g.addColorStop(i / (stops.length - 1), c));
+    return g;
+  }
+  const validStops = (stops) => (Array.isArray(stops) ? stops.map(parseColor).filter(Boolean) : []);
+
+  /** 漸層的平均色：用來決定上面的文字、Logo 要用深色還是淺色 */
+  function averageColor(stops) {
+    const list = validStops(stops);
+    if (!list.length) return '#ffffff';
+    const sum = list.map(hexToRgb).reduce((a, c) => a.map((v, i) => v + c[i]), [0, 0, 0]);
+    return rgbToHex(...sum.map((v) => v / list.length));
+  }
+
+  // color 為 gradient 時，依 stops 由左到右填入漸層
+  function tint(src, color, stops) {
     const c = document.createElement('canvas');
     c.width = src.width; c.height = src.height;
     const ctx = c.getContext('2d');
     ctx.drawImage(src, 0, 0);
     ctx.globalCompositeOperation = 'source-in';
-    ctx.fillStyle = color;
+    const list = validStops(stops);
+    ctx.fillStyle = color === 'gradient' && list.length >= 2 ? linearGradient(ctx, 0, 0, c.width, c.height, list)
+      : color === 'gradient' ? (list[0] || '#ffffff') : color;
     ctx.fillRect(0, 0, c.width, c.height);
     return c;
   }
@@ -582,7 +606,10 @@
     ctx.imageSmoothingQuality = 'high';
 
     ctx.clearRect(0, 0, L.width, L.height);
-    ctx.fillStyle = theme.bg;
+    const frameStops = validStops(opts.frameGradient && opts.frameGradient.stops);
+    ctx.fillStyle = opts.frameGradient && frameStops.length >= 2
+      ? linearGradient(ctx, 0, 0, L.width, L.height, frameStops, opts.frameGradient.dir)
+      : theme.bg;
     ctx.fillRect(0, 0, L.width, L.height);
     if (opts.overlayOnly) ctx.clearRect(L.imgX, L.imgY, W, H);
     else ctx.drawImage(img, crop.x, crop.y, W, H, L.imgX, L.imgY, W, H);
@@ -704,7 +731,7 @@
 
       let mark;
       if (sg.kind === 'image' && sg.image) {
-        mark = color === 'original' ? sg.image : tint(sg.image, color);
+        mark = color === 'original' ? sg.image : tint(sg.image, color, sg.gradient);
       } else if (sg.kind === 'text' && sg.text) {
         mark = document.createElement('canvas');
         const mctx = mark.getContext('2d');
@@ -745,7 +772,7 @@
         y = /^photo-t/.test(sg.pos) ? y0 : y1;
       }
 
-      if (sg.glass) drawGlass(x, y, bw, bh, inFrameArea, color);
+      if (sg.glass) drawGlass(x, y, bw, bh, inFrameArea, color === 'gradient' ? averageColor(sg.gradient) : color);
 
       ctx.save();
       ctx.globalAlpha = Math.max(0.1, Math.min(1, sg.opacity));
@@ -829,5 +856,5 @@
     }
   }
 
-  window.Frame = { brandName, logoForSoftware, WEB_FONTS, parseColor, colorsFor, isDark, removeWhite, trimTransparent, logoForHost, formatExposure, LOGOS, logoForMake, readExif, buildLines, getLogo, frameLayout, drawFrame, loadImage, logoCache };
+  window.Frame = { averageColor, brandName, logoForSoftware, WEB_FONTS, parseColor, colorsFor, isDark, removeWhite, trimTransparent, logoForHost, formatExposure, LOGOS, logoForMake, readExif, buildLines, getLogo, frameLayout, drawFrame, loadImage, logoCache };
 })();

@@ -220,18 +220,17 @@
           </div>
           <div id="frame-grad" class="grad-editor" hidden>
             <div class="grad-bar" aria-hidden="true"></div>
-            <div class="grad-stops"></div>
-            <div class="grad-actions">
-              <button class="btn btn-ghost btn-sm" data-grad-act="add" type="button" data-i18n="grad.add"></button>
-              <button class="btn btn-ghost btn-sm" data-grad-act="remove" type="button" data-i18n="grad.remove"></button>
-              <button class="btn btn-ghost btn-sm" data-grad-act="reverse" type="button" data-i18n="grad.reverse"></button>
+            <div class="grad-row">
+              <div class="grad-stops"></div>
+              <span class="grad-count muted small"></span>
+              <button class="btn btn-ghost btn-sm icon-btn" data-grad-act="remove" type="button" data-i18n-aria="grad.remove" data-i18n-title="grad.remove">−</button>
+              <button class="btn btn-ghost btn-sm icon-btn" data-grad-act="add" type="button" data-i18n-aria="grad.add" data-i18n-title="grad.add">＋</button>
             </div>
-            <div class="seg seg-full">
+            <div class="seg seg-full grad-dir">
               <button class="seg-btn" data-grad-dir="h" type="button" data-i18n="grad.dir.h"></button>
               <button class="seg-btn" data-grad-dir="v" type="button" data-i18n="grad.dir.v"></button>
               <button class="seg-btn" data-grad-dir="d" type="button" data-i18n="grad.dir.d"></button>
             </div>
-            <div class="grad-presets" role="group" data-i18n-aria="grad.preset"></div>
             <p class="hint" data-i18n="grad.hint.frame"></p>
           </div>
         </div>
@@ -414,7 +413,7 @@
             <div class="color-row">
               <button class="chip-color" data-sig-color="auto" data-sig="draw" type="button" data-i18n="sig.color.auto"></button>
               <button class="chip-color" data-sig-color="original" data-sig="draw" type="button" data-i18n="sig.color.original"></button>
-              <button class="chip-color" data-sig-color="gradient" data-sig="draw" type="button" data-i18n="grad.label"></button>
+              <button id="sig-draw-grad-btn" class="swatch swatch-grad" data-sig-color="gradient" data-sig="draw" type="button" data-i18n-aria="grad.label" data-i18n-title="grad.label"></button>
               <button class="swatch" data-sig-color="#ffffff" data-sig="draw" type="button" style="--sw:#ffffff" data-i18n-aria="f.white"></button>
               <button class="swatch" data-sig-color="#000000" data-sig="draw" type="button" style="--sw:#000000" data-i18n-aria="f.black"></button>
               <label class="swatch swatch-picker" data-i18n-title="f.colorPicker"><input type="color" class="sig-color-picker" data-sig="draw" value="#ffffff" data-i18n-aria="f.colorPicker"></label>
@@ -422,13 +421,12 @@
             </div>
           <div id="sig-draw-grad" class="grad-editor" hidden>
             <div class="grad-bar" aria-hidden="true"></div>
-            <div class="grad-stops"></div>
-            <div class="grad-actions">
-              <button class="btn btn-ghost btn-sm" data-grad-act="add" type="button" data-i18n="grad.add"></button>
-              <button class="btn btn-ghost btn-sm" data-grad-act="remove" type="button" data-i18n="grad.remove"></button>
-              <button class="btn btn-ghost btn-sm" data-grad-act="reverse" type="button" data-i18n="grad.reverse"></button>
+            <div class="grad-row">
+              <div class="grad-stops"></div>
+              <span class="grad-count muted small"></span>
+              <button class="btn btn-ghost btn-sm icon-btn" data-grad-act="remove" type="button" data-i18n-aria="grad.remove" data-i18n-title="grad.remove">−</button>
+              <button class="btn btn-ghost btn-sm icon-btn" data-grad-act="add" type="button" data-i18n-aria="grad.add" data-i18n-title="grad.add">＋</button>
             </div>
-            <div class="grad-presets" role="group" data-i18n-aria="grad.preset"></div>
             <p class="hint" data-i18n="grad.hint.sig"></p>
           </div>
           </div>

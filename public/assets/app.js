@@ -64,6 +64,8 @@
     }
   }
   delete settings._hadSigDraw;
+  settings.sigDraw.gradient = settings.sigDraw.gradient.slice(0, 5);
+  settings.frameGradient.stops = settings.frameGradient.stops.slice(0, 5);
   if (!Frame.parseColor(settings.frameColor)) settings.frameColor = '#ffffff';
   // 舊版預設為關閉；改為預設開啟後，對已存過設定的使用者套用一次
   if (!settings.autoGeoV2) { settings.autoGeo = true; settings.autoGeoV2 = true; }
@@ -1085,58 +1087,45 @@
 
   /* ---------- 漸層編輯器：邊框與手寫簽名共用。每一段顏色可自選，中間自動過渡 ---------- */
 
-  const MAX_STOPS = 6;
+  const GRAD_MIN = 2, GRAD_MAX = 5;
   const cssGradient = (stops, deg = 90) => `linear-gradient(${deg}deg, ${stops.join(', ')})`;
-  function gradEditor(root, { presets, get, set }) {
-    const bar = root.querySelector('.grad-bar');
+  function gradEditor(root, { get, set }) {
     const box = root.querySelector('.grad-stops');
-    root.querySelector('.grad-presets').innerHTML = presets.map((ps, i) =>
-      `<button class="grad-preset" type="button" data-preset="${i}" style="--sw:${cssGradient(ps)}"></button>`).join('');
-    const update = (stops) => set(stops.slice());
     function render() {
       const stops = get();
-      bar.style.background = cssGradient(stops);
+      root.querySelector('.grad-bar').style.background = cssGradient(stops);
       if (box.querySelectorAll('input').length !== stops.length) {
-        box.innerHTML = stops.map((c, i) => (i ? '<span class="grad-arrow" aria-hidden="true">›</span>' : '') +
-          `<label class="swatch grad-stop"><input type="color" data-i="${i}"></label>`).join('');
+        box.innerHTML = stops.map((c, i) => `<label class="swatch grad-stop"><input type="color" data-i="${i}"></label>`).join('');
       }
       box.querySelectorAll('input').forEach((inp, i) => {
         inp.parentElement.style.setProperty('--sw', stops[i]);
-        inp.setAttribute('aria-label', `${t('grad.stop')} ${i + 1}`);
+        inp.setAttribute('aria-label', t('grad.stop', { n: i + 1 }));
         if (document.activeElement !== inp) inp.value = stops[i];
       });
-      root.querySelector('[data-grad-act="add"]').disabled = stops.length >= MAX_STOPS;
-      root.querySelector('[data-grad-act="remove"]').disabled = stops.length <= 2;
-      root.querySelectorAll('.grad-preset').forEach((b, i) => b.classList.toggle('active', presets[i].join() === stops.join()));
+      root.querySelector('.grad-count').textContent = t('grad.count', { n: stops.length });
+      root.querySelector('[data-grad-act="add"]').disabled = stops.length >= GRAD_MAX;
+      root.querySelector('[data-grad-act="remove"]').disabled = stops.length <= GRAD_MIN;
     }
     box.addEventListener('input', (e) => {
       const stops = get().slice();
       stops[+e.target.dataset.i] = e.target.value;
-      update(stops);
+      set(stops);
     });
-    root.querySelector('.grad-actions').addEventListener('click', (e) => {
+    root.querySelector('.grad-row').addEventListener('click', (e) => {
       const act = e.target.closest('[data-grad-act]');
       if (!act) return;
       const stops = get().slice();
       // 新的一段放在最後兩段中間，顏色取兩者的平均，過渡才自然
-      if (act.dataset.gradAct === 'add' && stops.length < MAX_STOPS) stops.splice(stops.length - 1, 0, Frame.averageColor(stops.slice(-2)));
-      if (act.dataset.gradAct === 'remove' && stops.length > 2) stops.splice(stops.length - 2, 1);
-      if (act.dataset.gradAct === 'reverse') stops.reverse();
-      update(stops);
-    });
-    root.querySelector('.grad-presets').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-preset]');
-      if (b) update(presets[+b.dataset.preset]);
+      if (act.dataset.gradAct === 'add' && stops.length < GRAD_MAX) stops.splice(stops.length - 1, 0, Frame.averageColor(stops.slice(-2)));
+      else if (act.dataset.gradAct === 'remove' && stops.length > GRAD_MIN) stops.splice(stops.length - 2, 1);
+      else return;
+      set(stops);
     });
     window.addEventListener('langchange', render);
     return { render };
   }
 
   const frameGrad = gradEditor($('frame-grad'), {
-    presets: [
-      ['#fde2c4', '#f9c6d3', '#d4d3f7'], ['#d8f5ea', '#d3e8fb'], ['#ffe9d6', '#ffd1dc'],
-      ['#ffcf9f', '#ff9aa2', '#b5a7f0'], ['#1b2440', '#3a2d5c', '#141826'],
-    ],
     get: () => settings.frameGradient.stops,
     set: (stops) => { Object.assign(settings.frameGradient, { stops, on: true }); saveSettings(); syncFrameGradient(); renderPreview(); },
   });
@@ -1185,13 +1174,13 @@
     const text = document.querySelector(`.sig-color-text[data-sig="${k}"]`);
     if (hex) picker.value = hex;
     if (document.activeElement !== text) { text.value = hex.toUpperCase(); text.classList.remove('invalid'); }
-    if (k === 'draw') { $('sig-draw-grad').hidden = sg.color !== 'gradient'; sigGrad.render(); }
+    if (k === 'draw') {
+      $('sig-draw-grad').hidden = sg.color !== 'gradient';
+      $('sig-draw-grad-btn').style.setProperty('--sw', cssGradient(sg.gradient, 135));
+      sigGrad.render();
+    }
   }
   const sigGrad = gradEditor($('sig-draw-grad'), {
-    presets: [
-      ['#f7b22c', '#f47b62', '#b066d0', '#4a7ff0'], ['#ffb347', '#ff5e62', '#c13584'], ['#00c6ff', '#0072ff', '#6a3df0'],
-      ['#43e97b', '#38f9d7', '#7f7fd5'], ['#fff1b8', '#f5b916', '#b8860b'],
-    ],
     get: () => SIG.draw.gradient,
     set: (stops) => changeSig('draw', { gradient: stops, color: 'gradient' }),
   });
